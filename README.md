@@ -11,7 +11,7 @@ I recommend the following attacks:
 
 3. amplification (script: orchestator_final_mit_allen_details_en.py) (only 2.4 GHz) 
 
-4. # “case6_radio_confusion”: Confuses dual-band drivers. Purpose: Crashes the 5 GHz band. Broadcom.
+4. “case6_radio_confusion”: Confuses dual-band drivers. Purpose: Crashes the 5 GHz band. Broadcom.
  “case6_radio_confusion_reverse”: Inverse logic of Case 6. Purpose: Crashes the 2.4 GHz band. Broadcom.
  “case13_radio_confusion_mediatek”: Confuses MediaTek drivers. Purpose: Crashes the 2.4 GHz band.
  “case13_radio_confusion_mediatek_reverse”: Inverse logic of Case 13. Purpose: Crashes the 5 GHz band.
