@@ -1,0 +1,54 @@
+Here is a concise, direct guide for a technical user on how to identify a Broadcom chipset in a target router.
+How to Identify a Broadcom Chipset in a Target AP
+
+The most reliable method is to perform a deep packet inspection on the router's Beacon Frames. You are looking for a Vendor-Specific Information Element (IE) that contains Broadcom's unique identifier (OUI).
+
+Here is the step-by-step process in Kali:
+
+1. Preparation: Find the Target's Channel
+
+First, identify the channel your target AP is operating on.
+code Bash
+
+    
+# Replace <monitor_interface> with your adapter, e.g., wlan0mon
+sudo airodump-ng <monitor_interface>
+
+  
+
+Find your target's BSSID in the list and note its channel (CH). Let's assume it's channel 100.
+
+2. Execution: Capture One Beacon Frame
+
+Set your adapter to the correct channel and then use tshark to capture a single, fully detailed Beacon Frame from the target.
+code Bash
+
+    
+# Set your adapter to the target's channel
+sudo iwconfig wlan2mon channel 60
+
+# Capture and display one detailed Beacon Frame from the BSSID
+sudo tshark -i <monitor_interface> -c 1 -Y "wlan.fc.type_subtype == 8 and wlan.bssid == D4:86:60:A3:F9:6F" -V
+
+sudo tshark -i wlan2mon -c 2 -Y "wlan.fc.type_subtype == 8 and wlan.bssid == E0:28:6D:E4:D1:86" -V  
+
+3. Analysis: Find the Broadcom "Signature"
+
+In the verbose (-V) output from tshark, scroll down to the Tagged parameters section. You are looking for a specific block that looks exactly like this:
+code Code
+
+    
+Tag: Vendor Specific: Broadcom
+    Tag Number: Vendor Specific (221)
+    Tag length: 9
+    OUI: 00:10:18 (Broadcom)
+    Vendor Specific OUI Type: 2
+    ...```
+
+The line **`OUI: 00:10:18 (Broadcom)`** is the definitive proof. If you find this inside a "Vendor Specific" tag, you have 100% confirmed the AP is using a Broadcom chipset.
+
+### Why This Works
+
+The BSSID's OUI (e.g., `D4:86:60` for TP-Link) only identifies the device's final manufacturer. The chipset manufacturer embeds its own OUI (`00:10:18` for Broadcom) inside a special "Vendor Specific" field within the Beacon Frames it generates. This method reads that "hidden" signature.
+
+  
