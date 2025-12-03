@@ -28,24 +28,37 @@ WPA3-Attack/
 ├── README.md # This file
 │
 ├── Python Scripts (Orchestrators)
+
 │ ├── orchestator_master_en.py # Complete arsenal (26 attacks)
+
 │ ├── orchestator_final_mit_allen_details_en.py # Modern attacks (7 types)
+
 │ ├── orchestator_enhanced_plus_en.py # Enhanced attacks (9 types)
+
 │ └── orchestator_Moderne_Angriffe_2023+_en.py # Latest modern attacks
 │
 ├── Documentation
+
 │ ├── documentation_orchestator_master_guide.txt # Master orchestrator guide
+
 │ ├── documentation_orchestator_final_guide.txt # Final orchestrator guide
+
 │ ├── documentation_orchestator_enhanced_guide.txt # Enhanced orchestrator guide
+
 │ └── documentation_orchestator_moderne_guide.txt # Modern attacks guide
 │
 ├── Setup & Configuration
+
 │ ├── Wireshark settings.txt # Wireshark configuration
+
 │ └── Broadcom Qualcomm Mediatek chipset find out.txt # Chipset identification
 │
 └── Resources
+
 ├── Scarlar_Finte_Wireshark_findout.png # SAE parameter extraction guide
+
 ├── Screenshot_2025-10-31_14_02_52.png # Reference screenshots
+
 └── Screenshot_2025-10-31_14_03_17.png
 
 
@@ -86,6 +99,9 @@ WPA3-Attack/
 - Legacy attack flooding with Open Authentication requests
 - Overloads basic CPU queue processing
 - **Best for**: 5 GHz band, works on WPA2 & WPA3
+
+#### **radio_confusion**
+- GENERIC Cross-Band Attack
 
 #### **Amplification**
 - Spoofs legitimate device MAC addresses
