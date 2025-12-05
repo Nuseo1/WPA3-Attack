@@ -3,6 +3,8 @@
 ================================================================================
 Double_SSID_Attack_Tool
 ================================================================================
+Execution rights must be set: chmod +x Double_SSID_Attack_Tool_WPA2_WPA3.py
+
 Start the script with: sudo python3 Double_SSID_Attack_Tool_WPA2_WPA3.py
 
 FOR EDUCATIONAL PURPOSES AND AUTHORIZED SECURITY TESTS ONLY!
