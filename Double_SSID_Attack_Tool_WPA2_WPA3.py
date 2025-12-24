@@ -6,7 +6,7 @@ Double_SSID_Attack_Tool
 Execution rights must be set: chmod +x Double_SSID_Attack_Tool_WPA2_WPA3.py
 
 Start the script with: sudo python3 Double_SSID_Attack_Tool_WPA2_WPA3.py
-
+To hide the SSID, set ignore_broadcast_ssid=1 in the configuration template (PRIMARY / VIRTUAL).
 FOR EDUCATIONAL PURPOSES AND AUTHORIZED SECURITY TESTS ONLY!
 ================================================================================
 """
@@ -56,11 +56,12 @@ import csv
 # --- Configuration ---
 CLONE_PASSWORD = "1234567a"
 
-# --- UPDATED CONFIGURATION: Mixed WPA2/WPA3 (SAE) ---
+# To hide the SSID, set ignore_broadcast_ssid=1 in the configuration template.
 HOSTAPD_CONF_TEMPLATE_PRIMARY = """
 interface={interface}
 driver=nl80211
 ssid={ssid}
+ignore_broadcast_ssid=0
 hw_mode={hw_mode}
 channel={channel}
 bssid={bssid}
@@ -76,9 +77,11 @@ wmm_enabled=1
 ieee80211w=1
 """
 
+# To hide the SSID, set ignore_broadcast_ssid=1 in the configuration template.
 HOSTAPD_CONF_TEMPLATE_VIRTUAL = """
 bss={interface}_{index}
 ssid={ssid}
+ignore_broadcast_ssid=0
 bssid={bssid}
 wpa=2
 wpa_passphrase={password}
