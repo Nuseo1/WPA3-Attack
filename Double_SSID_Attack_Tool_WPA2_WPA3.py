@@ -265,14 +265,35 @@ def select_targets_from_scan(monitor_interface, oui_data):
     
     targets = []
     for target in selected_targets:
+        print(f"\n--- Configuring Target: {target['bssid']} ---")
+        
+        # 1. SSID
         if not target['essid']:
-            target['ssid'] = input(f"Enter SSID for {target['bssid']}: ").strip() or "Unknown"
+            target['ssid'] = input(f"  [?] Enter SSID for {target['bssid']} (Hidden network): ").strip() or "Unknown"
         else:
             target['ssid'] = target['essid']
+
+        # 2. BSSID Modification
+        new_bssid = input(f"  [?] Change BSSID? [Press Enter to keep {target['bssid']}]: ").strip()
+        if new_bssid:
+            if re.match(r'^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$', new_bssid):
+                target['bssid'] = new_bssid
+                print(f"  [+] BSSID updated to: {new_bssid}")
+            else:
+                print("  [!] Invalid format! Keeping original BSSID.")
+
+        # 3. Channel Modification
+        new_channel = input(f"  [?] Change Channel? [Press Enter to keep {target['channel']}]: ").strip()
+        if new_channel:
+            if new_channel.isdigit():
+                target['channel'] = int(new_channel)
+                print(f"  [+] Channel updated to: {target['channel']}")
+            else:
+                print("  [!] Invalid channel! Keeping original.")
+
         targets.append(target)
     return targets
 
-# --- CORRECTION HERE: --bssid removed ---
 def start_central_scanner(monitor_interface, targets):
     scan_prefix = "/tmp/central_scan"
     # Delete old files
