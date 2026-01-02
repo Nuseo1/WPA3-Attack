@@ -37,7 +37,7 @@ WPA3-Attack/
 │   └── ... (additional guides)
 │
 └── ⚙️ Setup & Resources
-    ├── Wireshark settings.txt                  # Config for capturing SAE
+    ├── SAE_Parameter_Extraction_Guide.md       # Config for capturing SAE
     ├── Chipset_Identification.txt              # Broadcom/Qualcomm/MediaTek guide
     └── SAE_Parameter_Extraction.png            # Visual guide
 ```
