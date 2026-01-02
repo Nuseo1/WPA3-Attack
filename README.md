@@ -27,9 +27,9 @@ WPA3-Attack/
 │   └── Double_SSID_Attack_Tool_WPA2_WPA3.py    # Rogue AP / BSSID Confusion Tool
 │
 ├── ⚔️ DoS Orchestrators (Packet Injection)
-│   ├── orchestator_master_en.py                # Complete arsenal (26 attacks)
-│   ├── orchestator_final_mit_allen_details_en.py # Modern attacks (7 types)
-│   ├── orchestator_enhanced_plus_en.py         # Enhanced attacks (9 types)
+│   ├── orchestator_master_en.py                # Complete arsenal
+│   ├── orchestator_final_mit_allen_details_en.py # Modern attacks
+│   ├── orchestator_enhanced_plus_en.py         # Enhanced attacks
 │   └── orchestator_Moderne_Angriffe_2023+_en.py# Latest modern attacks
 │
 ├── 📂 Documentation
