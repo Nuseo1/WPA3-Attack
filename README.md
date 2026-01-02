@@ -159,4 +159,4 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND. THE AUTHORS ARE 
 *   **Based on Research:** "How is your Wi-Fi connection today? DoS attacks on WPA3-SAE" (Journal of Information Security and Applications, 2022).
 *   **Standards:** IEEE 802.11-2020 / RFC 7664.
 
-**Last Updated:** January 1, 2026
+**Last Updated:** January, 2026
