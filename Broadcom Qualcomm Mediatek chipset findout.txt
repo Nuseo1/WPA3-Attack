@@ -25,12 +25,11 @@ code Bash
 
     
 # Set your adapter to the target's channel
-sudo iwconfig wlan2mon channel 60
+sudo iwconfig wlanXmon channel X
 
 # Capture and display one detailed Beacon Frame from the BSSID
-sudo tshark -i <monitor_interface> -c 1 -Y "wlan.fc.type_subtype == 8 and wlan.bssid == D4:86:60:A3:F9:6F" -V
 
-sudo tshark -i wlan2mon -c 2 -Y "wlan.fc.type_subtype == 8 and wlan.bssid == E0:28:6D:E4:D1:86" -V  
+sudo tshark -i wlanXmon -c 2 -Y "wlan.fc.type_subtype == 8 and wlan.bssid == AA:BB:CC:DD:EE:FF" -V  
 
 3. Analysis: Find the Broadcom "Signature"
 
