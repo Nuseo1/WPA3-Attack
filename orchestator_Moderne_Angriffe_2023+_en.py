@@ -29,7 +29,7 @@ TARGET_BSSID_GASTNETZ = "AA:BB:CC:DD:EE:13" # Example, please adapt
 
 # --- 3. OPTIONAL SCANNER ---
 # IMPORTANT: The scanner is MANDATORY for the 'ssid_confusion' attack!
-SCANNER_INTERFACE = "wlan1mon" # e.g. "wlan0mon" or ""
+SCANNER_INTERFACE = "" # e.g. "wlanXmon" or ""
 
 # --- 4. MANUAL CHANNEL ASSIGNMENT (Only for attacks WITHOUT scanner dependency) ---
 MANUELLER_KANAL_5GHZ = "52"    # Channel for MAIN NETWORK 5 GHz
@@ -38,11 +38,9 @@ MANUELLER_KANAL_GASTNETZ = "7" # Channel for GUEST NETWORK
 
 # --- 5. TARGET CLIENTS (Clients normally connected to the MAIN NETWORK) ---
 TARGET_STA_MACS = [
-    "30:34:DB:11:48:09",
-    "B2:5D:F9:73:10:6C"#,
-#    "6C:99:9D:95:70:8F",
-#    "6E:8F:9F:B4:3D:10"#,
-#    "82:49:2C:43:16:81"
+    "AA:BB:CC:DD:EE:13",
+    "AA:BB:CC:DD:EE:13",
+    "AA:BB:CC:DD:EE:13"
 ]
 
 # ====================== COMPLETE ENCYCLOPEDIA OF ATTACKS ======================
@@ -102,20 +100,13 @@ TARGET_STA_MACS = [
 #                             You will see the client sending an Association Request, but the 4-Way Handshake
 #                             (EAPOL packets) is never completed. After approx. 10-15 seconds, the client will
 #                             give up and send a Deauthentication Frame.
-#sudo tshark -i wlan5mon -Y "(wlan.sa == 56:14:9A:6D:10:2F || wlan.addr == 7C:0A:3F:6E:A1:58 || wlan.addr == 82:49:2C:43:16:81) && (eapol || wlan.fc.type_subtype == 0x0a || wlan.fc.type_subtype == 0x0c)"
-#sudo tshark -i wlan2mon -Y "(wlan.addr == 56:14:9A:6D:10:2F || wlan.addr == 7C:0A:3F:6E:A1:58 || wlan.addr == 16:08:57:DB:66:80 || wlan.addr == 82:49:2C:43:16:81) && (eapol || wlan.fc.type_subtype == 0x0a || wlan.fc.type_subtype == 0x0c)"
-#sudo tshark -i wlan3mon -Y "(wlan.addr == 56:14:9A:6D:10:2F || wlan.addr == 7C:0A:3F:6E:A1:58 || wlan.addr == 16:08:57:DB:66:80 || wlan.addr == 82:49:2C:43:16:81) && (eapol || wlan.fc.type_subtype == 0x0a || wlan.fc.type_subtype == 0x0c)"
+#
 # --- CENTRAL ADAPTER & ATTACK CONFIGURATION ---
 ADAPTER_KONFIGURATION = {
-#    "wlan2mon": {"band": "5GHz", "angriff": "sa_query_abuse"},
-#    "wlan3mon": {"band": "5GHz", "angriff": "sa_query_abuse"},
-#    "wlan3mon": {"band": "5GHz", "angriff": "ssid_confusion"},
-#    "wlan4mon": {"band": "5GHz", "angriff": "ssid_confusion"}#,
-#    "wlan3mon": {"band": "5GHz", "angriff": "sa_query_abuse"},
-    "wlan3mon": {"band": "2.4GHz", "angriff": "ssid_confusion"},
-    "wlan4mon": {"band": "2.4GHz", "angriff": "ssid_confusion"}#,
-#    "wlan4mon": {"band": "2.4GHz", "angriff": "handshake_block"}#,
-#    "wlan0": {"band": "2.4GHz", "angriff": "handshake_block"}
+    "wlan0mon": {"band": "5GHz", "angriff": "ssid_confusion"},
+    "wlan1mon": {"band": "5GHz", "angriff": "sa_query_abuse"},
+    "wlan2mon": {"band": "2.4GHz", "angriff": "ssid_confusion"},
+    "wlan0": {"band": "2.4GHz", "angriff": "handshake_block"}
 }
 # ================= HOW TO VERIFY ATTACK SUCCESS =================
 #
@@ -129,8 +120,8 @@ ADAPTER_KONFIGURATION = {
 # --- METHOD 2: CHECK SUCCESS FOR CLIENT DISCONNECTION ATTACKS ---
 # For attacks that disconnect the client directly (deauth_flood).
 # INSTRUCTION: sudo tshark -i <monitor_iface> -Y "wlan.addr == <CLIENT_MAC> and wlan.fc.type_subtype == 0x0c"
-#              sudo tshark -i wlan7mon -Y "(wlan.addr == 6A:6B:18:3C:91:4F || wlan.addr == 16:08:57:DB:66:80) && (eapol || wlan.fc.type_subtype == 0x0c)"
-#              sudo tshark -i wlan7mon -Y "(wlan.addr == 56:14:9A:6D:10:2F || wlan.addr == 16:08:57:DB:66:80) && (eapol || wlan.fc.type_subtype == 0x0c)"
+#              sudo tshark -i wlan7mon -Y "(wlan.addr == AA:BB:18:3C:91:4F || wlan.addr == 11:22:33:DB:66:80) && (eapol || wlan.fc.type_subtype == 0x0c)"
+#              sudo tshark -i wlan7mon -Y "(wlan.addr == AA:BB:9A:6D:10:2F || wlan.addr == 11:22:33:DB:66:80) && (eapol || wlan.fc.type_subtype == 0x0c)"
 # RESULT: You will see a flood of Deauthentication frames from the AP to the client.
 #
 # --- METHOD 3: CHECK SUCCESS OF "FRAMING FRAMES" ATTACKS (NEW) ---
@@ -143,9 +134,9 @@ ADAPTER_KONFIGURATION = {
 # B) For "sa_query_abuse":
 #    Goal: See the client disconnecting itself.
 #    Command: sudo tshark -i <monitor_iface> -Y "wlan.addr == <CLIENT_MAC> and wlan.fc.type_subtype == 0x0c"
-#             sudo tshark -i wlan7mon -Y "(wlan.addr == 56:14:9A:6D:10:2F || wlan.addr == 16:08:57:DB:66:80) && (eapol || wlan.fc.type_subtype == 0x0c)"
-#             sudo tshark -i wlan3mon -Y "(wlan.addr == 6A:6B:18:3C:91:4F) && (eapol || wlan.fc.type_subtype == 0x0c)"
-#             sudo tshark -i wlan6mon -Y "(wlan.addr == 6A:6B:18:3C:91:4F) && (eapol || wlan.fc.type_subtype == 0x0c)"
+#             sudo tshark -i wlan7mon -Y "(wlan.addr == AA:BB:CC:6D:10:2F || wlan.addr == 11:22:33:DB:66:80) && (eapol || wlan.fc.type_subtype == 0x0c)"
+#             sudo tshark -i wlan3mon -Y "(wlan.addr == AA:BB:CC:3C:91:4F) && (eapol || wlan.fc.type_subtype == 0x0c)"
+#             sudo tshark -i wlan6mon -Y "(wlan.addr == AA:BB:CC:3C:91:4F) && (eapol || wlan.fc.type_subtype == 0x0c)"
 #    Success: You see a Deauthentication frame where the SOURCE address is the client. This proves it kicked itself out.
 #
 #
@@ -154,7 +145,7 @@ ADAPTER_KONFIGURATION = {
 #    Command: sudo tshark -i <monitor_iface> -Y "wlan.addr == <CLIENT_MAC> and (eapol or wlan.fc.type_subtype == 0x0c)"
 #    Success: The client tries to connect (Association), but NO EAPOL packets appear. After approx. 10-15s, you see a Deauthentication frame from the client.
 #
-#sudo tshark -i wlan4mon -Y "(wlan.addr == 56:14:9A:6D:10:2F or wlan.addr == 16:08:57:DB:66:80 or wlan.addr == 7C:0A:3F:6E:A1:58 or wlan.addr == 82:49:2C:43:16:81) and (eapol or wlan.fc.type_subtype == 0x0a or wlan.fc.type_subtype == 0x0c)"
+#sudo tshark -i wlan4mon -Y "(wlan.addr == 55:66:77:6D:10:2F or wlan.addr == 11:22:33:DB:66:80 or wlan.addr == 77:88:99:6E:A1:58 or wlan.addr == 88:99:00:43:16:81) and (eapol or wlan.fc.type_subtype == 0x0a or wlan.fc.type_subtype == 0x0c)"
 # ==============================================================================================
 
 # ======================== SCRIPT LOGIC STARTS HERE ========================
