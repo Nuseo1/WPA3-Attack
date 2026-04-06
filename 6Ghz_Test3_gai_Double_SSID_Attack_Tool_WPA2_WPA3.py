@@ -20,7 +20,7 @@ import shutil
 import csv
 
 # --- Configuration ---
-CLONE_PASSWORD = "1234567a"
+CLONE_PASSWORD = ""
 
 # ---- hostapd Configuration Templates ----
 # Note: ieee80211w uses a placeholder {pmf} because 6GHz requires it to be 2 (Required), while others use 1 (Optional).
@@ -480,7 +480,7 @@ def main():
     print("\n" + "="*80)
     print(" Double SSID Attack Tool Setup")
     print("="*80)
-    CLONE_PASSWORD = input("[?] Clone passphrase for the Evil Twin [Press Enter for 1234567a]: ").strip() or "1234567a"
+    CLONE_PASSWORD = input("[?] Clone passphrase for the Evil Twin: ").strip()
     
     involved_interfaces = set()
     threads =[]
