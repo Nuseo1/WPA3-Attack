@@ -3,8 +3,8 @@
 ================================================================================
 Double_SSID_Attack_Tool  (with 6 GHz / Wi-Fi 6E Support & Freq Workaround)
 ================================================================================
-Execution rights must be set: chmod +x Double_SSID_Attack_Tool_WPA2_WPA3.py
-Start the script with: sudo python3 Double_SSID_Attack_Tool_WPA2_WPA3.py
+Execution rights must be set: chmod +x Double_SSID_Attack_Tool_WPA2_WPA3_6Ghz_support.py
+Start the script with: sudo python3 Double_SSID_Attack_Tool_WPA2_WPA3_6Ghz_support.py
 To hide the SSID, set ignore_broadcast_ssid=1 in the configuration template (PRIMARY / VIRTUAL).
 FOR EDUCATIONAL PURPOSES AND AUTHORIZED SECURITY TESTS ONLY!
 ================================================================================
@@ -20,7 +20,7 @@ import shutil
 import csv
 
 # --- Configuration ---
-CLONE_PASSWORD = ""
+CLONE_PASSWORD = "1234567a"
 
 # ---- hostapd Configuration Templates ----
 # Note: ieee80211w uses a placeholder {pmf} because 6GHz requires it to be 2 (Required), while others use 1 (Optional).
@@ -480,7 +480,6 @@ def main():
     print("\n" + "="*80)
     print(" Double SSID Attack Tool Setup")
     print("="*80)
-    CLONE_PASSWORD = input("[?] Clone passphrase for the Evil Twin: ").strip()
     
     involved_interfaces = set()
     threads =[]
