@@ -64,7 +64,7 @@ MANUELLER_KANAL_2_4GHZ = "1"
 
 # Clients for GENERAL attacks (deauth_flood, pmf_deauth_exploit, malformed...)
 TARGET_STA_MACS = [
-#    "AA:BB:CC:DD:EE:11",         Remove # to set the MAC address!
+#    "AA:BB:CC:DD:EE:11",         #Remove # to set the MAC address!
 #    "AA:BB:CC:DD:EE:11",
 #    "AA:BB:CC:DD:EE:11"
 ]
@@ -133,31 +133,18 @@ TARGET_STA_MACS_2_4GHZ_SPECIAL = [
 # "case13_radio_confusion_mediatek_reverse": Inverse logic of Case 13. Purpose: Crashes the 5 GHz band.
 #
 ###############################################################################################################################################
-    # TARGET: 5 GHz Crash (Broadcom APs)
-    # IMPORTANT: Adapter must be on 2.4 GHz because we "shoot" from there
-#    "wlan7mon": {"band": "2.4GHz", "angriff": "case6_radio_confusion"},
-#
-    # TARGET: 5 GHz Crash (MediaTek APs)
-    # IMPORTANT: Adapter must be on 2.4 GHz
-#    "wlan6mon": {"band": "2.4GHz", "angriff": "case13_radio_confusion_mediatek_reverse"}     
-#
-######################################################################################################
-    # TARGET: 2.4 GHz Crash (Broadcom APs)
-    # IMPORTANT: Adapter must be on 5 GHz to attack from there
-#    "wlan7mon": {"band": "5GHz", "angriff": "case6_radio_confusion_reverse"},
-#
-    # TARGET: 2.4 GHz Crash (MediaTek APs)
-    # IMPORTANT: Adapter must be on 5 GHz
-#    "wlan6mon": {"band": "5GHz", "angriff": "case13_radio_confusion_mediatek"}     
-# 
-# Conclusion for your configuration
-#
-# You don't need to remember why this is, just what your target is. The logic actually "crosses" due to historical documentation:
-#
-#    Case 6 (Standard) = Case 13 (Reverse) = Both crash 5 GHz.
-#
-#    Case 6 (Reverse) = Case 13 (Standard) = Both crash 2.4 GHz.
-#
+# ==============================================================================
+# HOW TO CHOOSE THE RIGHT ATTACK IN ADAPTER_KONFIGURATION
+# ==============================================================================
+# GOAL: Crash the 5 GHz Band
+# - Use "case6_radio_confusion" on 2.4GHz adapters
+# - Use "case13_radio_confusion_mediatek_reverse" on 2.4GHz adapters
+# (Needs MACs in TARGET_STA_MACS_5GHZ_SPECIAL) 
+
+# GOAL: Crash the 2.4 GHz Band
+# - Use "case6_radio_confusion_reverse" on 5GHz adapters
+# - Use "case13_radio_confusion_mediatek" on 5GHz adapters
+# (Needs MACs in TARGET_STA_MACS_2_4GHZ_SPECIAL) 
 # ==============================================================================================
 # --- 5. ADAPTER & ATTACK CONFIGURATION ---
 ADAPTER_KONFIGURATION = {
