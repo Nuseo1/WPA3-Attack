@@ -8,6 +8,15 @@ A comprehensive Python-based framework for testing WPA3 network security vulnera
 
 ---
 
+## Recommended Hardware
+
+For the best results when conducting the WPA3‑SAE DoS attacks described in the paper, have two Wi‑Fi adapters at hand:
+
+**Injection adapter**  
+   - **Alfa AWUS036ACH** (802.11ac, Realtek RTL8812AU chipset)  
+     This was the attacker’s primary adapter in the paper. It was used to fire the large bursts of spoofed SAE Commit and Auth frames (frame injection).  
+   - Any other adapter built on the **Realtek RTL8812AU chipset** will also do. The key requirement is reliable packet injection in monitor mode.
+
 ## 📚 Repository Overview
 
 This framework consists of two main categories of tools:
