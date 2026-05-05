@@ -1,1 +1,0 @@
-https://github.com/Nuseo1/WPA3-Attack/blob/main/SAE_Parameter_Extraction_Guide.md
