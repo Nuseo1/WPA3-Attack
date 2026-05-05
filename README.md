@@ -7,7 +7,22 @@
 
 ## 📡 Double_SSID_Attack_Tool_WPA2_WPA3.py
 
-A Python tool for testing WPA3 Transition Mode vulnerabilities (Double SSID attack). It creates a WPA2 network (with a known password) and a WPA3 network with the same SSID simultaneously, forcing clients to downgrade to WPA2 and capturing the 4‑way handshake.
+**Script:** `Double_SSID_Attack_Tool_WPA2_WPA3.py`
+
+This tool automates a "Double SSID" (or BSSID Confusion) attack. Instead of jamming frequencies, it creates **exact clones** of a target Access Point (AP), duplicating its **SSID** and **BSSID (MAC Address)**.
+
+### 🎯 How it works
+1.  **Layer 2 Confusion:** Clients within range see two physical sources emitting the exact same BSSID.
+2.  **Protocol Conflict:** The 802.11 protocol cannot efficiently handle duplicate BSSIDs on the same (or different) channels.
+3.  **Result:** Clients suffer from constant disconnections, failed handshakes, and complete connectivity loss.
+
+### ✨ Key Features
+*   **WPA2 & WPA3 (SAE) Mixed Mode:** Configured to support both legacy and modern clients simultaneously (`WPA-PSK SAE`) with optional PMF (`802.11w`).
+*   **Manual Target Configuration (Cross-Band):**
+    *   You can clone a 5GHz AP but broadcast it on a 2.4GHz channel.
+    *   Devices often prefer the stronger signal of the rogue 2.4GHz AP, leading to successful hijacking.
+*   **Hidden Network Support:** Capable of cloning hidden SSIDs (configurable via `ignore_broadcast_ssid`).
+*   **Multi-SSID Support:** Spawn multiple virtual interfaces to attack several networks at once.
 
 ### 🔧 Features
 
@@ -35,21 +50,9 @@ chmod +x Double_SSID_Attack_Tool_WPA2_WPA3.py
 ### 🚀 Usage
 
 ```bash
-sudo python3 Double_SSID_Attack_Tool_WPA2_WPA3.py -s <SSID> -c <channel> -i <interface>
+sudo python3 Double_SSID_Attack_Tool_WPA2_WPA3.py
 ```
-
-**Example:**
-
-```bash
-sudo python3 Double_SSID_Attack_Tool_WPA2_WPA3.py -s TestNet -c 6 -i wlan0
-```
-
-Parameters:
-
-- `-s`, `--ssid` : The SSID broadcast by both networks.
-- `-c`, `--channel` : Wi‑Fi channel (1–13 for 2.4 GHz).
-- `-i`, `--interface` : Name of the wireless interface in monitor mode.
-- Additionally, the WPA2 password can be set with `--wpa2-pass` (default: `12345678`).
+*Follow the interactive prompts to scan, select a target, and optionally override the BSSID or Channel.*
 
 ### ⚠️ Important Note
 
@@ -57,7 +60,7 @@ This tool is intended **only** for educational and research purposes, and for se
 
 ### 📚 Background
 
-WPA3 Transition Mode allows an access point to serve both WPA2 and WPA3 clients simultaneously. An attacker can broadcast a rogue WPA2 network with the same name, causing clients to fall back to the less secure WPA2 and exposing the WPA2 handshake for later decryption. This tool automates that attack.
+A Rogue AP implementation that creates protocol confusion at Layer 2 by cloning legitimate networks.
 
 ---
 
